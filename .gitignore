@@ -1,20 +1,46 @@
+# Entornos Virtuales
+.venv/
+venv/
+env/
+.env
+
+
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+*.so
 *.egg-info/
-.venv/
-env/
-venv/
+dist/
+build/
+*.egg
+*.whl
+
 
 # Django
 *.sqlite3
+db.sqlite3
 /media/
-staticfiles/
+/staticfiles/
 *.log
+*.pot
+*.mo
 
-# IDE
+
+# Archivos de SO y Editores
+# Sistema Operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores de código
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
 
-# Entorno
-.env
+
+# Otros
+.coverage
+htmlcov/
