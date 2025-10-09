@@ -45,6 +45,8 @@
                     {% if login_form.password.errors %}<div class="mt-1 text-xs text-red-500">{{ login_form.password.errors|striptags }}</div>{% endif %}
                 </div>
 
+                <a href="{% url 'accounts:password_reset' %}" class=" text-center text-sm text-text-muted hover:text-white hover:underline">¿Olvidaste tu contraseña?</a>
+
                 <button type="submit" name="action" value="login"
                         class="w-full mt-6 py-3 font-bold text-white bg-[#4285F4] rounded-lg hover:bg-[#357AE8]">
                     Iniciar Sesión
