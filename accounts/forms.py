@@ -79,7 +79,7 @@ class RegistrationForm(forms.Form):
             raise forms.ValidationError("El nombre de usuario es requerido.")
         if ' ' in username:
             raise forms.ValidationError("El nombre de usuario no puede contener espacios.")
-        if User.objects.filter(username=username).exists():
+        if User.objects.filter(username__iexact=username).exists():
             raise forms.ValidationError("Este nombre de usuario ya está en uso.")
         return username
 
