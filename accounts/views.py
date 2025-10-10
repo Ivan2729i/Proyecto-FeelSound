@@ -10,7 +10,10 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from .tokens import account_activation_token
+from django.conf import settings
+from django.urls import reverse
 
+# --- INICIO: LÓGICA DEL LOGIN ---
 
 def login_register_view(request):
     login_form = LoginForm()
@@ -30,27 +33,39 @@ def login_register_view(request):
                 user.is_active = False
                 user.save()
 
-                # --- Lógica para "enviar" el correo a la consola ---
-                current_site = get_current_site(request)
                 mail_subject = 'Activa tu cuenta de FeelSound'
-                message = render_to_string('accounts/acc_active_email.html', {
+
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                token = account_activation_token.make_token(user)
+
+                path = reverse('accounts:activate', args=[uid, token])
+                if getattr(settings, 'APP_BASE_URL', ''):
+                    activation_link = f"{settings.APP_BASE_URL}{path}"
+                else:
+                    activation_link = request.build_absolute_uri(path)
+
+                message_html = render_to_string('accounts/acc_active_email.html', {
                     'user': user,
-                    'domain': current_site.domain,
-                    'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-                    'token': account_activation_token.make_token(user),
+                    'activation_link': activation_link,
                 })
+
                 to_email = register_form.cleaned_data.get('email')
-                email_message = EmailMessage(mail_subject, message, to=[to_email])
-                email_message.send()
+
+                email_message = EmailMessage(
+                    subject=mail_subject,
+                    body=message_html,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[to_email],
+                )
+                email_message.content_subtype = "html"
+                email_message.send(fail_silently=False)
 
                 messages.success(request, '¡Cuenta creada con éxito! Verifica tu cuenta para iniciar sesión.')
 
-                # Reseteamos los forms y activamos la pestaña de login
                 login_form = LoginForm()
                 register_form = RegistrationForm()
                 active_tab = 'login'
             else:
-                # Si hay errores, mantenemos la pestaña de registro activa
                 active_tab = 'register'
 
         # --- Lógica de Login ---
@@ -61,7 +76,6 @@ def login_register_view(request):
                 login(request, user)
                 return redirect('accounts:dashboard')
             else:
-                # Si el login no es válido, mantenemos la pestaña activa
                 active_tab = 'login'
 
     context = {
@@ -88,6 +102,7 @@ def activate(request, uidb64, token):
         messages.error(request, 'El enlace de activación no es válido.')
         return redirect('home')
 
+# --- FIN: LÓGICA DEL LOGIN ---
 
 @login_required
 def home_view(request):

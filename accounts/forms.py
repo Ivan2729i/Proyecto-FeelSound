@@ -136,7 +136,6 @@ class LoginForm(AuthenticationForm):
         password = self.cleaned_data.get('password')
 
         if username_or_email and password:
-            # Asumimos que es un nombre de usuario
             username_to_auth = username_or_email
 
             # Si contiene '@', intentamos encontrar el usuario por su email
@@ -159,3 +158,4 @@ class LoginForm(AuthenticationForm):
         return self.cleaned_data
 
 # --- FIN: LÓGICA FORMULARIO DE LOGIN CON VALIDACIONES ---
+
