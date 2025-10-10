@@ -1,12 +1,11 @@
-{% autoescape off %}
-Hola {{ user.first_name }},
+<p>Hola {{ user.first_name|default:user.username }},</p>
+<p>Gracias por registrarte. Para activar tu cuenta haz clic aquí:</p>
 
-Gracias por registrarte en FeelSound. Por favor, haz clic en el siguiente enlace para activar tu cuenta:
+<p><a href="{{ activation_link }}">Activar mi cuenta</a></p>
 
-http://{{ domain }}{% url 'accounts:activate' uidb64=uid token=token %}
+<p>Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+<p>{{ activation_link }}</p>
 
-Si no te registraste en FeelSound, por favor ignora este mensaje.
-
-¡Gracias!
-El equipo de FeelSound
-{% endautoescape %}
+<p>Si no te registraste en FeelSound, por favor ignora este mensaje.</p>
+<p>¡Gracias!</p>
+<p>El equipo de FeelSound</p>

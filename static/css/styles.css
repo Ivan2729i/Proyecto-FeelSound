@@ -1,0 +1,234 @@
+/* ============ FEELSOUND CLASES GLOBALES ============ */
+:root{
+  /* Paleta base */
+  --fs-bg-start: #101A33;
+  --fs-bg-end:   #0A0F21;
+
+  --fs-surface:       #2B3A5A;   /* card */
+  --fs-surface-50:    rgba(43,58,90,.5); /* card/50 */
+  --fs-surface-border:#3E4E71;
+
+  --fs-text-main:  #ffffff;
+  --fs-text-muted: #8e9bb5;
+
+  --fs-primary:        #4285F4;
+  --fs-primary-hover:  #357AE8;
+
+  --fs-radius: 16px;
+  --fs-shadow: 0 20px 60px rgba(2,6,23,.55);
+
+  --fs-stop-0:  #0c1426;  /* oscuro izquierda */
+  --fs-stop-1:  #13254a;  /* azul profundo intermedio */
+  --fs-stop-2:  #203c7a;  /* transición */
+  --fs-stop-3:  #2e51be;  /* azul vivo a la derecha */
+  --fs-right-glow: rgba(79,125,255,.45); /* luz lateral derecha */
+}
+
+/* Tipografía global */
+html, body{
+  font-family: "Montserrat", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.btn-fs,
+.btn-fs-outline,
+.btn-fs--white {
+  cursor: pointer;
+}
+
+/* ============ UTILIDADES ============ */
+/* Fondo degradado general de las páginas */
+.bg-fs-dif{
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      clamp(700px, 70vw, 1200px) clamp(500px, 55vh, 900px) at 108% 50%,
+      var(--fs-right-glow) 0%,
+      rgba(79,125,255,.22) 38%,
+      rgba(79,125,255,.10) 58%,
+      transparent 72%
+    ),
+    linear-gradient(
+      90deg,
+      var(--fs-stop-0) 0%,
+      var(--fs-stop-1) 32%,
+      var(--fs-stop-2) 64%,
+      var(--fs-stop-3) 100%
+    );
+}
+
+.bg-fs-dif::after{
+  content:"";
+  position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(1200px 800px at -20% -10%, rgba(0,0,0,.20), transparent 60%),
+    radial-gradient(1000px 700px at 50% 120%, rgba(0,0,0,.18), transparent 60%);
+  mix-blend-mode: multiply;
+}
+
+/* Superficies */
+.bg-card{ background-color: var(--fs-surface); }
+.bg-card\/50{ background-color: var(--fs-surface-50); }
+.border-card-border{ border-color: var(--fs-surface-border); }
+
+/* Texto */
+.text-text-main{ color: var(--fs-text-main); }
+.text-text-muted{ color: var(--fs-text-muted); }
+
+/* Primario */
+.bg-primary{ background-color: var(--fs-primary); }
+.hover\:bg-primary-hover:hover{ background-color: var(--fs-primary-hover); }
+
+/* Placeholders (placeholder-text-muted) */
+.placeholder-text-muted::placeholder{ color: var(--fs-text-muted); }
+
+/* Sombra y radios coherentes */
+.shadow-fs{ box-shadow: var(--fs-shadow); }
+.rounded-fs{ border-radius: var(--fs-radius); }
+
+/* Input estándar FeelSound */
+.input-fs{
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--fs-surface);
+  border: 1px solid var(--fs-surface-border);
+  border-radius: 12px;
+  color: var(--fs-text-main);
+  outline: none;
+  transition: box-shadow .2s, border-color .2s;
+}
+.input-fs::placeholder{ color: var(--fs-text-muted); }
+.input-fs:focus{
+  border-color: var(--fs-primary);
+  box-shadow: 0 0 0 4px rgba(66,133,244,.20);
+}
+
+/* Card “glass” */
+.card-fs{
+  background: var(--fs-surface-50);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--fs-surface-border);
+  border-radius: 16px;
+  box-shadow: var(--fs-shadow);
+}
+
+/* ============ BOTONES REUTILIZABLES ============ */
+/* Sólido con gradiente + brillo deslizante */
+.btn-fs{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  width: 100%;
+  height: 44px;
+  padding: 0 1.25rem;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 700;
+  background-image: linear-gradient(180deg, #4f7dff, var(--fs-primary));
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 6px 20px rgba(79,125,255,.35);
+  transition: transform .08s ease, filter .2s ease, box-shadow .2s ease, background .2s ease;
+  overflow: hidden;
+}
+.btn-fs:hover{
+  filter: brightness(1.05);
+  box-shadow: 0 10px 24px rgba(79,125,255,.45);
+}
+.btn-fs:active{ transform: translateY(1px); }
+
+/* Hover morado para botones azules */
+.btn-fs--hover-purple:hover{
+  background-image: linear-gradient(180deg, #7a5cff, #5a39e8);
+  box-shadow: 0 10px 24px rgba(102, 76, 255, .45);
+}
+
+/* Variante blanca del botón principal */
+.btn-fs--white{
+  background-image: none;
+  background-color: #ffffff;
+  color: #1f2937;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+}
+.btn-fs--white:hover{
+  background-color: #f3f4f6;
+  box-shadow: 0 8px 22px rgba(0,0,0,.16);
+}
+.btn-fs--white:active{
+  background-color: #f1f3f4;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.1);
+}
+.btn-fs--white::after{ display: none; }
+.btn-fs--white:focus{ outline: none; box-shadow: 0 0 0 4px rgba(66,133,244,.25); }
+
+/* Brillo */
+.btn-fs::after{
+  content:"";
+  position:absolute;
+  top:0; left:-120%;
+  width:60%; height:100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  transform: skewX(-20deg);
+}
+.btn-fs:hover::after{
+  left: 120%;
+  transition: left .8s ease;
+}
+
+/* Outline con animación */
+.btn-fs-outline{
+  position: relative;
+  display: inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:.5rem;
+  width: 100%;
+  height: 44px;
+  padding: 0 1.25rem;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--fs-text-main);
+  border: 2px solid rgba(255,255,255,.8);
+  transition: color .2s ease, background .2s ease, transform .08s ease, box-shadow .2s ease;
+  overflow: hidden;
+}
+.btn-fs-outline:hover{
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+.btn-fs-outline:active{ transform: translateY(1px); }
+
+.btn-fs-outline::after{
+  content:"";
+  position:absolute;
+  top:0; left:-120%;
+  width:60%; height:100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+  transform: skewX(-20deg);
+}
+.btn-fs-outline:hover::after{
+  left:120%;
+  transition:left .8s ease;
+}
+
+/* Variante compacta para botones pequeños */
+.btn-fs-sm{ height: 40px; border-radius: 10px; font-weight: 600; }
+.btn-fs-lg{ height: 48px; border-radius: 14px; }
+
+/* Link underline animado */
+.link-underline{
+  position: relative; text-decoration: none; color: var(--fs-text-muted);
+  transition: color .2s ease, letter-spacing .2s ease;
+}
+.link-underline::after{
+  content:""; position:absolute; left:0; bottom:-2px; height:2px; width:0;
+  background: var(--fs-primary); transition: width .25s ease;
+}
+.link-underline:hover{ color: #fff; letter-spacing: .3px; }
+.link-underline:hover::after{ width:100%; }
