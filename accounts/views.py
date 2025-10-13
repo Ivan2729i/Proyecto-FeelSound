@@ -74,7 +74,7 @@ def login_register_view(request):
             if login_form.is_valid():
                 user = login_form.get_user()
                 login(request, user)
-                return redirect('accounts:dashboard')
+                return redirect('home:dashboard')
             else:
                 active_tab = 'login'
 
@@ -104,6 +104,3 @@ def activate(request, uidb64, token):
 
 # --- FIN: LÓGICA DEL LOGIN ---
 
-@login_required
-def home_view(request):
-    return render(request, 'accounts/home.html')

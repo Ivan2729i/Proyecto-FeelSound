@@ -42,3 +42,32 @@ document.addEventListener('DOMContentLoaded', () => {
         showLogin();
     }
 });
+
+// --- Toasts auto-cierre + animación ---
+document.addEventListener('DOMContentLoaded', () => {
+  const toasts = document.querySelectorAll('.toast-msg');
+
+  toasts.forEach((t) => {
+    const type = t.dataset.type || '';
+    const isLonger = type.includes('error') || type.includes('warning');
+    const delay = isLonger ? 5000 : 3000;
+
+    // Cerrar manualmente
+    const closeBtn = t.querySelector('.close-toast');
+    if (closeBtn) closeBtn.addEventListener('click', () => dismiss(t));
+
+    // Auto-cerrar
+    setTimeout(() => dismiss(t), delay);
+  });
+
+  function dismiss(el) {
+    // Animación (Tailwind v3 ya incluye transform en las utilities de translate)
+    el.classList.add('opacity-0', 'translate-y-2');   // desliza y desvanece
+    el.classList.add('transition-all', 'duration-500');
+
+    // Opcional: leve escala para “shrink”
+    el.classList.add('scale-95');
+
+    setTimeout(() => el.remove(), 500);
+  }
+});
