@@ -1,0 +1,26 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard</title>
+</head>
+<body class="min-h-screen bg-fs-dif bg-cover bg-center text-white">
+  <div class="min-h-screen bg-black/50 flex items-center justify-center">
+    <div class="w-full max-w-xl mx-auto px-6 py-10 rounded-2xl bg-white/10 backdrop-blur">
+      <h1 class="text-3xl font-extrabold mb-2">¡Bienvenido!</h1>
+      <p class="text-white/80 mb-8">
+        {% if request.user.first_name %}{{ request.user.first_name }}{% else %}{{ request.user.email }}{% endif %}
+      </p>
+      <form method="post" action="{% url 'account_logout' %}">
+        {% csrf_token %}
+        <button type="submit"
+                class="btn-fs btn-fs--hover-purple w-full py-3 font-bold text-white bg-[#ef4444] rounded-lg hover:bg-[#dc2626]">
+          Cerrar sesión
+        </button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

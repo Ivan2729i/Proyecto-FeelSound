@@ -19,15 +19,47 @@
 <body class="bg-gray-900">
 
     {% if messages %}
-        <ul class="messages absolute top-5 left-1/2 -translate-x-1/2 z-50 list-none">
-            {% for message in messages %}
-                <li class="p-4 mb-4 text-sm rounded-lg shadow-lg animate-fade-in-down
-                    {% if message.tags == 'error' %} bg-red-500 text-white {% else %} bg-green-500 text-white {% endif %}">
-                    {{ message }}
-                </li>
-            {% endfor %}
-        </ul>
+      <div id="toast-root" class="fixed top-6 left-0 right-0 z-[9999] flex justify-center px-4">
+        <div class="flex flex-col gap-3 w-full max-w-md">
+          {% for message in messages %}
+            <div
+              role="alert"
+              aria-live="polite"
+              data-type="{{ message.tags }}"
+              class="toast-msg relative flex items-start gap-3 px-4 py-3 rounded-xl shadow-xl
+                     border backdrop-blur transition-all duration-500 will-change-transform
+                     text-white
+                     {% if 'success' in message.tags %} bg-emerald-600/90 border-emerald-400/40 {% elif 'error' in message.tags %} bg-rose-600/90 border-rose-400/40 {% elif 'warning' in message.tags %} bg-amber-600/90 border-amber-400/40 {% else %} bg-sky-600/90 border-sky-400/40 {% endif %}">
+              <!-- Icono -->
+              <div class="mt-[2px]">
+                {% if 'success' in message.tags %}
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7.5 10.5l2 2 4-4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {% elif 'error' in message.tags %}
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 6v5m0 3h.01M10 18a8 8 0 100-16 8 8 0 000 16z" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+                {% elif 'warning' in message.tags %}
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 7v4m0 3h.01M3 16h14L10 3 3 16z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {% else %}
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 14v-4m0-3h.01M10 18a8 8 0 100-16 8 8 0 000 16z" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+                {% endif %}
+              </div>
+
+              <!-- Texto -->
+              <p class="text-sm leading-5 font-medium">{{ message }}</p>
+
+              <!-- Botón cerrar -->
+              <button type="button" class="absolute top-2.5 right-2.5 close-toast"
+                      aria-label="Cerrar notificación">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M6 6l8 8M14 6l-8 8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
     {% endif %}
+
+
     {% block content %}
     {% endblock %}
 

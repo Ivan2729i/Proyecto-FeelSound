@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load socialaccount %}
 
 {% block title %}Login FeelSound{% endblock %}
 
@@ -62,11 +63,11 @@
                     <span class="px-4 text-xs font-bold text-gray-400">O</span>
                     <hr class="w-full border-gray-600">
                 </div>
-                <button type="button"
-                        class="btn-fs btn-fs--white cursor-pointer w-full mt-6 py-3 flex items-center justify-center font-semibold  text-gray-800 rounded-lg hover:bg-gray-200">
-                    <img src="{% static 'img/google-icon.svg' %}" alt="Google Icon" class="w-6 h-6 mr-3">
-                    Iniciar sesion con Google
-                </button>
+                <a href="{% provider_login_url 'google' process='login' %}"
+                   class="btn-fs btn-fs--white cursor-pointer w-full mt-6 py-3 flex items-center justify-center font-semibold text-gray-800 rounded-lg hover:bg-gray-200">
+                  <img src="{% static 'img/google-icon.svg' %}" alt="Google Icon" class="w-6 h-6 mr-3">
+                  Iniciar sesión con Google
+                </a>
             </form>
         </div>
 
