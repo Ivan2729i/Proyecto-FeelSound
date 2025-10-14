@@ -37,7 +37,8 @@ INSTALLED_APPS = [
     'home',
     'debug_toolbar',
 ]
-SITE_ID = 1
+
+SITE_ID = int(os.environ.get("DJANGO_SITE_ID", 1))
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -117,9 +118,12 @@ AUTH_PASSWORD_VALIDATORS = [
 AUTH_USER_MODEL = 'accounts.User'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home:dashboard'
-LOGOUT_REDIRECT_URL = 'home:dashboard'
-ACCOUNT_LOGOUT_REDIRECT_URL = 'home'
+LOGOUT_REDIRECT_URL = 'login'
+ACCOUNT_LOGOUT_REDIRECT_URL = 'login'
 SOCIALACCOUNT_LOGIN_ON_GET = True
+ACCOUNT_LOGOUT_ON_GET = True
+ACCOUNT_ADAPTER = "accounts.adapters.FeelSoundAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "accounts.adapters.CustomSocialAccountAdapter"
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/

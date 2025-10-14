@@ -1,26 +1,72 @@
+{% extends 'base.html' %}
 {% load static %}
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Dashboard</title>
-</head>
-<body class="min-h-screen bg-fs-dif bg-cover bg-center text-white">
-  <div class="min-h-screen bg-black/50 flex items-center justify-center">
-    <div class="w-full max-w-xl mx-auto px-6 py-10 rounded-2xl bg-white/10 backdrop-blur">
-      <h1 class="text-3xl font-extrabold mb-2">¡Bienvenido!</h1>
-      <p class="text-white/80 mb-8">
-        {% if request.user.first_name %}{{ request.user.first_name }}{% else %}{{ request.user.email }}{% endif %}
-      </p>
-      <form method="post" action="{% url 'account_logout' %}">
-        {% csrf_token %}
-        <button type="submit"
-                class="btn-fs btn-fs--hover-purple w-full py-3 font-bold text-white bg-[#ef4444] rounded-lg hover:bg-[#dc2626]">
-          Cerrar sesión
-        </button>
-      </form>
-    </div>
+{% load socialaccount %}
+
+{% block title %}Dashboard • FeelSound{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-screen bg-fs-dif px-4">
+
+  <!-- Encabezado -->
+  <div class="text-center mb-8">
+    <h1 class="text-4xl md:text-5xl font-bold text-white">FeelSound</h1>
+    <p class="text-[#8e9bb5] mt-2 text-lg">Bienvenido(a) de vuelta</p>
   </div>
-</body>
-</html>
+
+  <!-- Tarjeta principal -->
+  <div class="w-full max-w-3xl p-6 md:p-8 space-y-6 bg-[#2B3A5A]/50 backdrop-blur-xl rounded-2xl shadow-lg border border-[#3E4E71]">
+
+    <!-- Perfil -->
+    <div class="flex items-center gap-4">
+      {% with sa=user.socialaccount_set.first %}
+        {% if sa and sa.get_avatar_url %}
+          <img src="{{ sa.get_avatar_url }}" alt="Avatar" class="w-12 h-12 rounded-full ring-2 ring-white/20">
+        {% else %}
+          <div class="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white/70">🙂</div>
+        {% endif %}
+      {% endwith %}
+      <div>
+        <p class="text-sm text-[#8e9bb5]">Sesión iniciada</p>
+        <h2 class="text-xl font-bold text-white">
+          {{ user.get_full_name|default:user.username|default:user.email }}
+        </h2>
+        <p class="text-sm text-[#8e9bb5]">{{ user.email }}</p>
+      </div>
+
+      <div class="ml-auto">
+        <!-- Cerrar sesión directo (sin confirmación) -->
+        <a href="{% url 'account_logout' %}"
+           class="btn-fs btn-fs--hover-purple inline-flex items-center gap-2 px-4 py-2 rounded-lg">
+          <!-- icon -->
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 12H3m0 0l4-4M3 12l4 4M15 5h2a4 4 0 014 4v6a4 4 0 01-4 4h-2"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Cerrar sesión
+        </a>
+      </div>
+    </div>
+
+    <!-- Acciones rápidas -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <a href="#" class="rounded-xl p-4 bg-[#2B3A5A] border border-[#3E4E71] hover:bg-[#2B3A5A]/80 transition">
+        <p class="text-sm text-[#8e9bb5]">Explorar</p>
+        <p class="text-lg font-semibold text-white">Música</p>
+      </a>
+      <a href="#" class="rounded-xl p-4 bg-[#2B3A5A] border border-[#3E4E71] hover:bg-[#2B3A5A]/80 transition">
+        <p class="text-sm text-[#8e9bb5]">Tu</p>
+        <p class="text-lg font-semibold text-white">Biblioteca</p>
+      </a>
+      <a href="#" class="rounded-xl p-4 bg-[#2B3A5A] border border-[#3E4E71] hover:bg-[#2B3A5A]/80 transition">
+        <p class="text-sm text-[#8e9bb5]">Cuenta</p>
+        <p class="text-lg font-semibold text-white">Configuración</p>
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}

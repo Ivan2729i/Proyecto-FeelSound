@@ -24,14 +24,7 @@
             <form method="POST" action="">
                 {% csrf_token %}
 
-                {% if login_form.non_field_errors %}
-                    <div class="p-3 bg-red-500/20 border border-red-500/50 text-red-400 text-sm rounded-lg">
-                        {% for error in login_form.non_field_errors %}{{ error }}{% endfor %}
-                    </div>
-                {% endif %}
-                {% if messages %}{% for message in messages %}{% if message.tags == 'error' %}
-                <div class="p-3 bg-red-500/20 border border-red-500/50 text-red-400 text-sm rounded-lg">{{ message }}</div>
-                {% endif %}{% endfor %}{% endif %}
+
 
                 <div>
                     <label for="id_username" class="block mb-2 mt-4 text-sm font-medium text-white">Email o Nombre de Usuario</label>
