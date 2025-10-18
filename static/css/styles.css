@@ -22,6 +22,9 @@
   --fs-stop-2:  #203c7a;  /* transición */
   --fs-stop-3:  #2e51be;  /* azul vivo a la derecha */
   --fs-right-glow: rgba(79,125,255,.45); /* luz lateral derecha */
+
+  --fs-header-h: 64px;
+  --fs-player-h: 0px;
 }
 
 /* Tipografía global */
@@ -38,6 +41,17 @@ html, body{
 }
 
 /* ============ UTILIDADES ============ */
+
+/* Barra de scroll */
+#fs-songs-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.35) transparent; }
+#fs-songs-scroll::-webkit-scrollbar { width: 10px; }
+#fs-songs-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.25));
+  border-radius: 8px;
+}
+#fs-songs-scroll::-webkit-scrollbar-track { background: transparent; }
+
+
 /* Fondo degradado general de las páginas */
 .bg-fs-dif{
   position: relative;
@@ -232,3 +246,55 @@ html, body{
 }
 .link-underline:hover{ color: #fff; letter-spacing: .3px; }
 .link-underline:hover::after{ width:100%; }
+
+/* Topbar */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Reproductor */
+.fs-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.fs-range::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 9999px;
+  background: rgba(255,255,255,.18);
+}
+.fs-range::-moz-range-track {
+  height: 6px; border-radius: 9999px;
+  background: rgba(255,255,255,.18);
+}
+.fs-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px; height: 14px; margin-top: -4px;
+  border-radius: 9999px; background: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.35);
+}
+.fs-range::-moz-range-thumb {
+  width: 14px; height: 14px; border: none;
+  border-radius: 9999px; background: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.35);
+}
+
+.fs-marquee { overflow: hidden; }
+.fs-marq-track {
+  display: flex;
+  align-items: center;
+  gap: var(--marq-gap, 32px);
+  transform: translateX(0);
+  animation: marq var(--marq-speed, 10s) linear infinite;
+  will-change: transform;
+}
+.fs-marq-item { white-space: nowrap; }
+
+.fs-marquee.no-anim .fs-marq-track {
+  animation: none;
+  transform: translateX(0);
+}
+
+@keyframes marq {
+  from { transform: translateX(0); }
+  to   { transform: translateX(calc(-1 * var(--marq-cycle, 0px))); }
+}

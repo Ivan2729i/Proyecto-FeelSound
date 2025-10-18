@@ -71,3 +71,29 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => el.remove(), 500);
   }
 });
+
+// Cambia iconos play/pause visualmente
+document.getElementById('btn-play')?.addEventListener('click', (e) => {
+  const btn = e.currentTarget;
+  const playing = btn.dataset.state === 'playing';
+  btn.dataset.state = playing ? 'paused' : 'playing';
+  btn.setAttribute('aria-label', playing ? 'Reproducir' : 'Pausar');
+  btn.querySelector('.icon-play')?.classList.toggle('hidden', !playing);
+  btn.querySelector('.icon-pause')?.classList.toggle('hidden', playing);
+});
+
+//scroll
+(function(){
+  function setHeights(){
+    const p = document.getElementById('fs-playerbar');
+    const hPlayer = p ? p.offsetHeight : 0;   // ej. 92~100px
+    const hHeader = 64;                       // tu h-16
+    const extraTop = 112;                     // ~ 7rem para títulos
+    const main = document.getElementById('fs-content');
+    const panel = document.getElementById('fs-songs-scroll');
+    if(main) main.style.height = `calc(100dvh - ${hHeader}px - ${hPlayer}px)`;
+    if(panel) panel.style.height = `calc(100dvh - ${hHeader}px - ${hPlayer}px - ${extraTop}px)`;
+  }
+  window.addEventListener('load', setHeights);
+  window.addEventListener('resize', setHeights);
+})();

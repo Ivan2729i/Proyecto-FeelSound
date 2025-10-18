@@ -5,68 +5,286 @@
 {% block title %}Dashboard • FeelSound{% endblock %}
 
 {% block content %}
-<div class="flex flex-col items-center justify-center min-h-screen bg-fs-dif px-4">
+<!-- TOPBAR -->
+<header id="fs-topbar" class="sticky top-0 z-40 w-full border-b border-white/10 bg-[#0B1E5B]/90 backdrop-blur">
+  <div class="px-4 sm:px-5 lg:px-8 h-16 flex items-center gap-3 sm:gap-6">
+    <!-- Logo -->
+    <a href="{% url 'home:dashboard' %}" class="flex items-center gap-2 shrink-0">
+      <span aria-hidden="true" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-500/15">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 3a9 9 0 0 0-9 9v6a3 3 0 0 0 3 3h1a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1a3 3 0 0 0 3-3v-6a9 9 0 0 0-9-9z"/>
+        </svg>
+      </span>
+      <span class="text-white text-2xl md:text-3xl font-extrabold tracking-tight hover:opacity-90">FeelSound</span>
+    </a>
 
-  <!-- Encabezado -->
-  <div class="text-center mb-8">
-    <h1 class="text-4xl md:text-5xl font-bold text-white">FeelSound</h1>
-    <p class="text-[#8e9bb5] mt-2 text-lg">Bienvenido(a) de vuelta</p>
+    <!-- Menú móvil -->
+    <div class="md:hidden ml-auto">
+      <button class="btn-fs btn-fs--hover-purple px-3 py-1.5 rounded-lg ">Menú</button>
+    </div>
+
+    <div class="hidden md:flex items-center gap-3 flex-1">
+      <span class="text-white/80">¿Cómo te sientes hoy?</span>
+      <div id="fs-emoji-row" class="flex items-center gap-1.5">
+        <button class="emoji-chip text-2xl md:text-3xl leading-none rounded-full p-1.5 md:p-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50 data-[active=true]:ring-2 data-[active=true]:ring-white/40" type="button" data-emoji="happy" data-active="true" title="Feliz" aria-label="Feliz">😁</button>
+        <button class="emoji-chip text-2xl md:text-3xl leading-none rounded-full p-1.5 md:p-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50" type="button" data-emoji="sad" title="Triste" aria-label="Triste">😢</button>
+        <button class="emoji-chip text-2xl md:text-3xl leading-none rounded-full p-1.5 md:p-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50" type="button" data-emoji="love" title="Amor" aria-label="Amor">🥰</button>
+        <button class="emoji-chip text-2xl md:text-3xl leading-none rounded-full p-1.5 md:p-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50" type="button" data-emoji="angry" title="Enojado" aria-label="Enojado">😡</button>
+        <button class="emoji-chip text-2xl md:text-3xl leading-none rounded-full p-1.5 md:p-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50" type="button" data-emoji="calm" title="Calmado" aria-label="Calmado">😴</button>
+        <button class="emoji-chip text-2xl md:text-3xl leading-none rounded-full p-1.5 md:p-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50" type="button" data-emoji="neutral" title="Neutral" aria-label="Neutral">😐</button>
+      </div>
+    </div>
+
+    <div class="hidden md:flex items-center gap-4">
+      <span class="text-white/80">
+        Bienvenido, <strong>{{ user.first_name|default:user.username }}</strong>
+      </span>
+      <a id="btn-logout" href="{% url 'account_logout' %}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg btn-fs btn-fs--hover-purple">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M16 13v-2H7V8l-5 4 5 4v-3h9zM20 3h-8v2h8v14h-8v2h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/>
+        </svg>
+        Cerrar sesión
+      </a>
+    </div>
   </div>
 
-  <!-- Tarjeta principal -->
-  <div class="w-full max-w-3xl p-6 md:p-8 space-y-6 bg-[#2B3A5A]/50 backdrop-blur-xl rounded-2xl shadow-lg border border-[#3E4E71]">
+  <!-- Emojis en móvil -->
+  <div class="md:hidden px-4 pb-3">
+    <div class="text-white/80 text-sm mb-2">¿Cómo te sientes hoy?</div>
+    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+      <button class="emoji-chip text-2xl leading-none rounded-full p-1.5 hover:bg-white/10 data-[active=true]:ring-2 data-[active=true]:ring-white/40" type="button" data-emoji="happy" data-active="true" title="Feliz" aria-label="Feliz">😁</button>
+      <button class="emoji-chip text-2xl leading-none rounded-full p-1.5 hover:bg-white/10" type="button" data-emoji="sad" title="Triste" aria-label="Triste">😢</button>
+      <button class="emoji-chip text-2xl leading-none rounded-full p-1.5 hover:bg-white/10" type="button" data-emoji="love" title="Amor" aria-label="Amor">🥰</button>
+      <button class="emoji-chip text-2xl leading-none rounded-full p-1.5 hover:bg-white/10" type="button" data-emoji="angry" title="Enojado" aria-label="Enojado">😡</button>
+      <button class="emoji-chip text-2xl leading-none rounded-full p-1.5 hover:bg-white/10" type="button" data-emoji="calm" title="Calmado" aria-label="Calmado">😴</button>
+      <button class="emoji-chip text-2xl leading-none rounded-full p-1.5 hover:bg-white/10" type="button" data-emoji="neutral" title="Neutral" aria-label="Neutral">😐</button>
+    </div>
+  </div>
+</header>
 
-    <!-- Perfil -->
-    <div class="flex items-center gap-4">
-      {% with sa=user.socialaccount_set.first %}
-        {% if sa and sa.get_avatar_url %}
-          <img src="{{ sa.get_avatar_url }}" alt="Avatar" class="w-12 h-12 rounded-full ring-2 ring-white/20">
-        {% else %}
-          <div class="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white/70">🙂</div>
-        {% endif %}
-      {% endwith %}
-      <div>
-        <p class="text-sm text-[#8e9bb5]">Sesión iniciada</p>
-        <h2 class="text-xl font-bold text-white">
-          {{ user.get_full_name|default:user.username|default:user.email }}
-        </h2>
-        <p class="text-sm text-[#8e9bb5]">{{ user.email }}</p>
-      </div>
+<!-- Overlay móvil para cerrar el menú -->
+<div id="fs-overlay" class="fixed inset-0 bg-black/50 opacity-0 pointer-events-none md:hidden transition-opacity"></div>
 
-      <div class="ml-auto">
-        <!-- Cerrar sesión directo (sin confirmación) -->
-        <a href="{% url 'account_logout' %}"
-           class="btn-fs btn-fs--hover-purple inline-flex items-center gap-2 px-4 py-2 rounded-lg">
-          <!-- icon -->
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15 12H3m0 0l4-4M3 12l4 4M15 5h2a4 4 0 014 4v6a4 4 0 01-4 4h-2"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<!-- LAYOUT: Sidebar + Contenido -->
+<div class="flex">
+
+  <!-- SIDEBAR (off-canvas en móvil, fija en desktop) -->
+  <aside id="fs-sidebar"
+    class="fixed top-16 left-0 h-[calc(100dvh-4rem)] w-72 bg-[#0B1E5B]/90 border-r border-white/10
+           -translate-x-full transition-transform md:translate-x-0 md:static md:h-[calc(100vh-4rem)] md:w-64">
+
+    <nav class="h-full overflow-y-auto no-scrollbar p-4 space-y-6">
+      <!-- Sección principal -->
+      <div class="space-y-1">
+        <!-- Activo: bg-white/15 text-white -->
+        <a href="#/dashboard"
+           class="fs-navitem group flex items-center gap-3 px-3 py-2 rounded-lg text-white bg-white/15 hover:bg-white/20">
+          <!-- icono biblioteca -->
+          <svg class="w-5 h-5 opacity-90" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M4 6a2 2 0 0 1 2-2h3v16H6a2 2 0 0 1-2-2V6zm7-2h3a2 2 0 0 1 2 2v14h-5V4zm8 2a2 2 0 0 0-2-2h-1v16h1a2 2 0 0 0 2-2V6z"/>
           </svg>
-          Cerrar sesión
+          <span class="font-medium">Biblioteca Musical</span>
+        </a>
+
+        <a href="#/perfil"
+           class="fs-navitem group flex items-center gap-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">
+          <!-- icono usuario -->
+          <svg class="w-5 h-5 opacity-90" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.33 0-8 2.17-8 5v1h16v-1c0-2.83-3.67-5-8-5z"/>
+          </svg>
+          <span class="font-medium">Perfil</span>
+        </a>
+
+        <a href="#/playlists"
+           class="fs-navitem group flex items-center gap-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">
+          <!-- icono lista -->
+          <svg class="w-5 h-5 opacity-90" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M3 5h14v2H3V5zm0 6h14v2H3v-2zm0 6h10v2H3v-2zM19 5h2v2h-2V5zm0 6h2v2h-2v-2zm0 6h2v2h-2v-2z"/>
+          </svg>
+          <span class="font-medium">Mis playlists</span>
+        </a>
+
+        <a href="#/playlist/new"
+           class="fs-navitem group flex items-center gap-3 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">
+          <!-- icono más -->
+          <svg class="w-5 h-5 opacity-90" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M11 11V6h2v5h5v2h-5v5h-2v-5H6v-2z"/>
+          </svg>
+          <span class="font-medium">Crear playlist</span>
         </a>
       </div>
-    </div>
 
-    <!-- Acciones rápidas -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <a href="#" class="rounded-xl p-4 bg-[#2B3A5A] border border-[#3E4E71] hover:bg-[#2B3A5A]/80 transition">
-        <p class="text-sm text-[#8e9bb5]">Explorar</p>
-        <p class="text-lg font-semibold text-white">Música</p>
-      </a>
-      <a href="#" class="rounded-xl p-4 bg-[#2B3A5A] border border-[#3E4E71] hover:bg-[#2B3A5A]/80 transition">
-        <p class="text-sm text-[#8e9bb5]">Tu</p>
-        <p class="text-lg font-semibold text-white">Biblioteca</p>
-      </a>
-      <a href="#" class="rounded-xl p-4 bg-[#2B3A5A] border border-[#3E4E71] hover:bg-[#2B3A5A]/80 transition">
-        <p class="text-sm text-[#8e9bb5]">Cuenta</p>
-        <p class="text-lg font-semibold text-white">Configuración</p>
-      </a>
-    </div>
+      <!-- Separador -->
+      <div class="pt-1">
+        <div class="px-3 text-xs uppercase tracking-wider text-white/50 mb-2">Listas de reproducción</div>
+        <div class="space-y-1">
+          <a href="#/playlists/1" class="block px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">Prueba 1</a>
+          <a href="#/playlists/2" class="block px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">Focus Beats</a>
+          <a href="#/playlists/3" class="block px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">Workout Hits</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
 
-  </div>
+  <!-- CONTENIDO principal -->
+  <main id="fs-content" class="bg-fs-dif flex-1 p-4 md:p-6 lg:p-8 h-[calc(100dvh-64px-96px)] overflow-hidden">
+    <!-- === VIEW: Biblioteca Musical === -->
+    <section id="view-dashboard" class="space-y-6 ">
+      <!-- Encabezado -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-3xl font-bold text-white">Tu Música</h1>
+          <p class="text-[#4CC9F0] font-medium">Estado de ánimo: Feliz</p>
+        </div>
+
+        <!-- Buscador -->
+        <div class="w-full sm:w-72 lg:w-80 relative">
+          <input
+            id="fs-search"
+            type="text"
+            placeholder="Buscar canciones, artistas, álbum..."
+            class="w-full h-10 bg-white/5 border border-white/10 rounded-xl pl-10 pr-3 outline-none text-sm placeholder:text-white/40 focus:border-white/20 focus:ring-0 text-white"
+          />
+          <svg xmlns="http://www.w3.org/2000/svg"
+               viewBox="0 0 24 24"
+               fill="none"
+               stroke="currentColor"
+               stroke-width="2"
+               stroke-linecap="round"
+               stroke-linejoin="round"
+               class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-white/70 pointer-events-none">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Tabla de canciones -->
+      <div class="rounded-2xl bg-white/5 backdrop-blur border border-white/10 overflow-hidden shadow-lg">
+        <div id="fs-songs-scroll"
+             class="overflow-y-auto pr-1"
+             style="height: calc(100dvh - 64px - 96px - 8rem);">
+          <table class="min-w-full divide-y divide-white/10 text-sm text-white/80">
+            <thead class="sticky top-0 z-10 bg-[#0B1E5B] text-white/80 text-xs uppercase tracking-wider shadow-[0_1px_0_0_rgba(255,255,255,.08)]">
+              <tr>
+                <th class="px-4 py-3 text-left font-medium">#</th>
+                <th class="px-4 py-3 text-left font-medium">Título</th>
+                <th class="px-4 py-3 text-left font-medium">Álbum</th>
+                <th class="px-4 py-3 text-left font-medium">Duración</th>
+              </tr>
+            </thead>
+            <tbody id="fs-results-body" class="divide-y divide-white/5 cursor-pointer"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PLAYER BAR -->
+    <footer id="fs-playerbar"
+      class="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-black/40 backdrop-blur">
+      <div class="max-w-7xl mx-auto px-4 md:px-6 py-3
+                  grid grid-cols-[320px_1fr_180px] items-center gap-4">
+
+        <!-- Izquierda: cover + info -->
+        <div class="flex items-center gap-3 min-w-0">
+          <img id="player-cover" src="{% static 'img/no_music.png' %}" alt="Imagen Defecto"
+               class="w-12 h-12 rounded-lg object-cover bg-white/10 filter invert brightness-200" />
+          <div class="min-w-0">
+            <div id="player-title" class="fs-marquee max-w-[260px]">
+              <div class="fs-marq-track">
+                <span id="player-title-text" class="fs-marq-item text-white">No hay nada reproduciéndose</span>
+                <span class="fs-marq-item fs-marq-dup text-white" aria-hidden="true"></span>
+              </div>
+            </div>
+            <div id="player-artist"
+                 class="fs-marquee max-w-[260px] text-white/60 text-sm">
+              <div class="fs-marq-track">
+                <span id="player-artist-text" class="fs-marq-item">--</span>
+              </div>
+            </div>
+          </div>
+          <button id="btn-like"
+            class="ml-2 hidden sm:grid place-items-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20"
+            aria-label="Agregar a favoritos" aria-pressed="false">
+            <svg class="w-5 h-5 text-white/90" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Centro: controles + progreso -->
+        <div class="min-w-0 flex flex-col items-center gap-2">
+          <div class="flex items-center gap-2">
+            <!-- Prev -->
+            <button id="btn-prev"
+              class="p-2 grid place-items-center text-white/90 hover:text-white cursor-pointer"
+              aria-label="Anterior">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                <line x1="5" y1="19" x2="5" y2="5"></line>
+              </svg>
+            </button>
+            <!-- Play / Pause -->
+            <button id="btn-play"
+              class="w-10 h-10 rounded-full bg-white text-black hover:bg-white/90 grid place-items-center cursor-pointer"
+              aria-label="Reproducir" data-state="paused">
+              <!-- Play -->
+              <svg class="icon-play w-5 h-5" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="6 4 20 12 6 20 6 4"></polygon>
+              </svg>
+              <!-- Pause -->
+              <svg class="icon-pause w-5 h-5 hidden" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+            </button>
+            <!-- Next -->
+            <button id="btn-next"
+              class="p-2 grid place-items-center text-white/90 hover:text-white cursor-pointer"
+              aria-label="Siguiente">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                <line x1="19" y1="5" x2="19" y2="19"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div class="w-full flex items-center gap-2 text-xs text-white/70">
+            <span id="player-time-current" class="tabular-nums">0:00</span>
+            <input id="player-seek" type="range" min="0" max="100" value="0"
+                   class="fs-range flex-1 h-1.5 rounded-full accent-white/80 cursor-pointer">
+            <span id="player-time-total" class="tabular-nums">0:30</span>
+          </div>
+        </div>
+
+        <!-- Derecha: volumen -->
+        <div class="hidden sm:flex items-center gap-3 justify-end">
+          <svg class="w-6 h-6 md:w-7 md:h-7 text-white/90" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a9 9 0 0 1 0 14.14"></path>
+          </svg>
+          <input id="player-volume" type="range" min="0" max="100" value="70"
+                 class="fs-range w-28 h-1.5 rounded-full accent-white/80 cursor-pointer">
+        </div>
+      </div>
+
+      <audio id="fs-audio" preload="none"></audio>
+    </footer>
+
+
+  </main>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
 <script src="{% static 'js/main.js' %}"></script>
+<script src="{% static 'js/dz.js' %}"></script>
 {% endblock %}
