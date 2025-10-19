@@ -298,3 +298,7 @@ html, body{
   from { transform: translateX(0); }
   to   { transform: translateX(calc(-1 * var(--marq-cycle, 0px))); }
 }
+
+/* Invertir color del icono reproductor */
+.img-placeholder { filter: invert(1) brightness(2); }
+
