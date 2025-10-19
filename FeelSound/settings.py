@@ -114,6 +114,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+FEELSOUND_USE_LYRICS = True
+
 # Redirecciones
 AUTH_USER_MODEL = 'accounts.User'
 LOGIN_URL = 'login'
