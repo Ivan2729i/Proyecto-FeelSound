@@ -51,6 +51,17 @@ document.addEventListener('DOMContentLoaded', () => {
     return [t.artist, ...(t.contributors || [])].filter(Boolean).join(', ');
   }
 
+  // --- Adaptar el track para Stats (plays/tiempo/recientes)
+  function trackForStats(t) {
+    return {
+      id: t.id,
+      title: t.title,
+      artists: artistsFullList(t),
+      cover: t.cover
+    };
+  }
+
+
   // --- Marquee infinito ---
   function setupMarquee(wrapperEl) {
     if (!wrapperEl) return;
@@ -281,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currentIndex = idx;
       if (!loadTrack(t)) return;
 
+      window.setCurrentTrack(trackForStats(t));
       const tryPlayFast = () => {
         const p = audio.play();
         if (p && typeof p.then === 'function') {
@@ -302,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await ensurePreviewFor(idx, true);
           t = currentList[idx];
           if (!loadTrack(t)) return;
+          window.setCurrentTrack(trackForStats(t));
           const p2 = audio.play();
           if (p2 && typeof p2.then === 'function') await p2;
           setPlayUI(true);
@@ -326,6 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (!loadTrack(t)) return false;
       currentIndex = idx;
+      window.setCurrentTrack(trackForStats(t));
       audio.pause();
       audio.currentTime = 0;
       audio.load();
@@ -390,6 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await ensurePreviewFor(currentIndex, true);
       const t = currentList[currentIndex];
       if (!loadTrack(t)) return;
+      window.setCurrentTrack(trackForStats(t));
       const p = audio.play();
       if (p && typeof p.then === 'function') await p;
       setPlayUI(true);
