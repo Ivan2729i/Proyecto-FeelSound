@@ -1,3 +1,12 @@
+// --- Helper global para generar clave de localStorage única por usuario ---
+function getStatsKey() {
+  const ctx = document.getElementById('django-context');
+  const email = ctx?.dataset?.email || '';
+  const userId = ctx?.dataset?.user || '';
+  return `fs_profile_stats_v1${email ? '::' + email : (userId ? '::' + userId : '')}`;
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
     const loginTab = document.getElementById('login-tab');
     const registerTab = document.getElementById('register-tab');
@@ -103,8 +112,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
   const $navDash  = document.querySelector('a[href="#/dashboard"]');
   const $navPerfil= document.querySelector('a[href="#/perfil"]');
 
-  // --- Storage & Mock ---------------------------------
-  const LS_KEY = 'fs_profile_stats_v1';
+  const LS_KEY = getStatsKey();
     function loadStats() {
       const def = {
         total_plays: 0,
@@ -132,6 +140,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     if (h) return `${h} h`;
     return `${m} min`;
   }
+
   function favMood(moodCounts) {
     const entries = Object.entries(moodCounts || {});
     if (!entries.length) return '—';
@@ -139,6 +148,15 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     const map = { happy:'Felicidad 😁', sad:'Tristeza 😢', love:'Amor 🥰', angry:'Enojo 😡', calm:'Calma 😴', neutral:'Neutral 😐' };
     return map[entries[0][0]] || entries[0][0];
   }
+
+  // helper para escapar atributos HTML
+  const escAttr = (s) =>
+    String(s ?? '')
+      .replace(/&/g,'&amp;')
+      .replace(/"/g,'&quot;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;');
+
   function renderProfile() {
     const stats = loadStats();
 
@@ -166,17 +184,28 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
             <div class="text-white/60 text-sm truncate">${t.artists}</div>
           </div>
         </div>
-        <button class="text-[#B5179E] hover:opacity-80 text-sm shrink-0" data-replay="${t.id}">Reproducir nuevamente</button>
+        <button
+          class="fs-replay-link shrink-0"
+          data-replay="${escAttr(t.id)}"
+          data-title="${escAttr(t.title)}"
+          data-artists="${escAttr(t.artists)}"
+          data-cover="${escAttr(t.cover)}" >
+          Reproducir nuevamente
+        </button>
       `;
       cont.appendChild(row);
     });
 
     // Reproducir nuevamente
     cont.querySelectorAll('button[data-replay]').forEach(btn=>{
-      btn.addEventListener('click', (e)=>{
-        const id = e.currentTarget.getAttribute('data-replay');
-        // playByTrackId(id);
-        console.log('Reproducir nuevamente:', id);
+      btn.addEventListener('click', () => {
+        const rec = {
+          id: btn.getAttribute('data-replay'),
+          title: btn.getAttribute('data-title') || '',
+          artists: btn.getAttribute('data-artists') || '',
+          cover: btn.getAttribute('data-cover') || ''
+        };
+        if (window.replayRecent) window.replayRecent(rec);
       });
     });
   }
@@ -210,10 +239,9 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 })();
 
 
-
 // ======== Stats ========
 (function () {
-  const LS_KEY = 'fs_profile_stats_v1';
+  const LS_KEY = getStatsKey();
   const audio  = document.getElementById('fs-audio');
 
   // Estado en memoria para la sesión actual
@@ -272,12 +300,17 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     if (elFavs) elFavs.textContent = (stats.favorites_count ?? 0);
   };
 
-  // --------- Registro de recientes (máx 3) ----------
+  // --------- Registro de recientes (máx 3, sin duplicados) ----------
   function pushRecent(track) {
-    if (!track || !track.id) return;
-    const last = stats.recent_tracks[0];
-    if (last && last.id === track.id) return;
+    if (!track) return;
 
+    const norm = v => (v || '').toString().trim().toLowerCase();
+    const sameTrack = (a, b) => {
+      if (a?.id && b?.id) return String(a.id) === String(b.id);
+      return norm(a?.title) === norm(b?.title) && norm(a?.artists) === norm(b?.artists);
+    };
+    stats.recent_tracks = (stats.recent_tracks || []).filter(t => !sameTrack(t, track));
+    // Insertar al frente
     stats.recent_tracks.unshift({
       id: track.id,
       title: track.title,
@@ -285,7 +318,9 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
       cover: track.cover,
       started_at_ts: Date.now()
     });
-    stats.recent_tracks = stats.recent_tracks.slice(0,3);
+    // Máximo 3
+    stats.recent_tracks = stats.recent_tracks.slice(0, 3);
+    saveStats(stats);
   }
 
   // --------- Play count real ----------

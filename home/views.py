@@ -192,6 +192,33 @@ def vote_song_emotion(request, song_id: int):
     return JsonResponse({"ok": True, "top_emocion": c.top_emocion.clave, "scores": agg})
 
 
+# --- Helpers de normalización ---
+def _as_text(v, *prefer_keys):
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        for k in prefer_keys:
+            val = v.get(k)
+            if isinstance(val, str):
+                return val
+        if isinstance(v.get('name'), dict):
+            return _as_text(v['name'], *prefer_keys) or ""
+        if isinstance(v.get('title'), dict):
+            return _as_text(v['title'], *prefer_keys) or ""
+        return ""
+    return ""
+
+def _as_id(v):
+    if isinstance(v, dict):
+        if 'id' in v:
+            return v['id']
+        if isinstance(v.get('name'), dict) and 'id' in v['name']:
+            return v['name']['id']
+        if isinstance(v.get('title'), dict) and 'id' in v['title']:
+            return v['title']['id']
+    return None
+
+
 @csrf_exempt
 @require_POST
 def capture_deezer_track(request):
@@ -211,15 +238,29 @@ def capture_deezer_track(request):
     duration  = int(payload.get("duration") or 30)
     preview   = (payload.get("preview") or "")[:500]
 
+    # --- Normalización robusta del payload ----
     art = payload.get("artist") or {}
     alb = payload.get("album") or {}
 
-    artist_name = (art.get("name") or "").strip()
-    artist_dzid = str(art["id"]) if art.get("id") else None
+    artist_name = _as_text(art.get("name"), "name", "title").strip()
+    album_title = (_as_text(alb.get("title"), "title", "name") or "—").strip()
 
-    album_title = (alb.get("title") or "").strip() or "—"
-    album_dzid  = str(alb["id"]) if alb.get("id") else None
-    album_cover = alb.get("cover") or ""
+    artist_dzid_raw = art.get("id")
+    album_dzid_raw = alb.get("id")
+    if not artist_dzid_raw:
+        artist_dzid_raw = _as_id(art.get("name"))
+    if not album_dzid_raw:
+        album_dzid_raw = _as_id(alb.get("title"))
+
+    artist_dzid = str(artist_dzid_raw) if artist_dzid_raw else None
+    album_dzid = str(album_dzid_raw) if album_dzid_raw else None
+
+    album_cover = ""
+    if isinstance(alb.get("cover"), str):
+        album_cover = alb["cover"]
+    elif isinstance(alb.get("title"), dict):
+        c = alb["title"].get("cover")
+        album_cover = c if isinstance(c, str) else ""
 
     if not artist_dzid or not album_dzid or not artist_name or not album_title or not album_cover:
         t = _dz_get(f"/track/{dz_track_id}") or {}
@@ -313,3 +354,4 @@ def capture_deezer_track(request):
     })
 
 # --- FIN: LÓGICA DE LAS EMOCIONES ---
+
