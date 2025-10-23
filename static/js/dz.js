@@ -17,11 +17,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const tTotEl      = document.getElementById('player-time-total');
   const volEl       = document.getElementById('player-volume');
   const moodLabel = document.getElementById('fs-mood-label');
+  const btnRepeatOne = document.getElementById('btn-repeat-one');
+  const emolistEl   = document.getElementById('fs-emotions');
 
 
   // Estado
   let currentList = [];
   let currentIndex = -1;
+
+  // === Repeat One (repetir solo la canción actual) ===
+  let repeatOne = JSON.parse(localStorage.getItem('fs-repeat-one') || 'false');
+  function applyRepeatOne(isOn) {
+    if (!audio) return;
+    audio.loop = isOn;
+    btnRepeatOne?.setAttribute('aria-pressed', String(isOn));
+    if (btnRepeatOne) {
+      btnRepeatOne.title = isOn ? 'Repetir esta canción (activo)' : 'Repetir esta canción';
+    }
+  }
+  applyRepeatOne(repeatOne);
+
 
   function dzUrlExpired(u) {
     try {
@@ -94,6 +109,34 @@ document.addEventListener('DOMContentLoaded', () => {
         artist: { id: artistId ?? undefined, name: artistName || '' },
         album:  { id: albumId ?? undefined,  title: albumTitle || '—', cover: albumCover || '' },
       };
+    }
+
+  // === Emociones por track ===
+    function renderEmotions(list) {
+      if (!emolistEl) return;
+      if (!Array.isArray(list) || !list.length) {
+        emolistEl.innerHTML = '<span class="text-white/50 text-sm">Sin etiquetas</span>';
+        return;
+        }
+      emolistEl.innerHTML = list.slice(0, 6).map(e => `
+        <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-white/10 text-white/80">
+          ${e.emocion} <span class="opacity-70">(${Number(e.score).toFixed(2)})</span>
+        </span>
+      `).join(' ');
+    }
+
+    async function loadEmotionsFor(trackId) {
+      if (!trackId) { renderEmotions([]); return; }
+      try {
+        const r = await fetch(`/api/v1/tracks/${trackId}/emotions`, { headers: { "Accept": "application/json" }});
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        // data = [{emocion:"Feliz", score:"0.92", source:"..."}, ...]
+        renderEmotions(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.warn('Emotions error:', err);
+        renderEmotions([]);
+      }
     }
 
 
@@ -190,45 +233,45 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function doSearch(q) {
-    if (!q) return;
-    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Buscando “${q}”…</td></tr>`;
-    try {
-      const res = await fetch(`/api/deezer/search/?type=track&q=${encodeURIComponent(q)}`);
-      const json = await res.json();
+      if (!q) return;
+      tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Buscando “${q}”…</td></tr>`;
+      try {
+        const res = await fetch(`/api/v1/tracks?query=${encodeURIComponent(q)}`, {
+          headers: { "Accept": "application/json" }
+        });
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.results || []);
 
-      const items = (json.data || []).map(x => {
-        const main = x.artist?.name || '';
-        const contribs = Array.isArray(x.contributors)
-          ? x.contributors.map(c => c.name).filter(n => n && n !== main)
-          : [];
-        return {
+        const items = list.map(x => ({
           id: x.id,
-          title: x.title,
-          duration: x.duration,
-          preview: x.preview,
-          artist: main,
-          contributors: contribs,
-          album: x.album?.title || '',
-          cover: x.album?.cover || ''
-        };
-      });
+          title: x.titulo || '',
+          duration: x.duracion || 30,
+          preview: x.preview_url || '',
+          artist: x.artista || '',
+          contributors: [],
+          album: x.album || '',
+          cover: x.cover || '',
+          top_emocion: x.top_emocion || null
+        }));
 
-      currentList = items;
-      currentIndex = -1;
+        currentList = items;
+        currentIndex = -1;
 
-      if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Sin resultados.</td></tr>`;
-        return;
+        if (!items.length) {
+          tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Sin resultados.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = items.map(formatRow).join('');
+        wireRows();
+
+        localStorage.setItem('fs_last_query', q);
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-red-300">Error: ${err}</td></tr>`;
       }
-
-      tbody.innerHTML = items.map(formatRow).join('');
-      wireRows();
-      enrichContributors(currentList);
-      localStorage.setItem('fs_last_query', q);
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-red-300">Error: ${err}</td></tr>`;
-    }
   }
+
 
   // Completa contributors pidiendo /track/:id y actualiza la línea visual
   async function enrichContributors(list) {
@@ -309,6 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tTotEl)  tTotEl.textContent = mmss(30); // previews ~30s
     if (seekEl)  seekEl.value = 0;
 
+    renderEmotions([]);
     return true;
   }
 
@@ -349,11 +393,13 @@ document.addEventListener('DOMContentLoaded', () => {
             setPlayUI(true);
             prefetchNext();
             captureTrackFireAndForget(t);
+            loadEmotionsFor(t.id);
           });
         } else {
           setPlayUI(true);
           prefetchNext();
           captureTrackFireAndForget(t);
+          loadEmotionsFor(t.id); // cargar emociones del track actual
           return Promise.resolve();
         }
       };
@@ -369,6 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
           setPlayUI(true);
           prefetchNext();
           captureTrackFireAndForget(t);
+          loadEmotionsFor(t.id); // cargar emociones del track actual
         } catch {
           setPlayUI(false);
           alert('No se pudo reproducir el preview. Prueba con otra pista.');
@@ -401,6 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setPlayUI(true);
       prefetchNext();
       captureTrackFireAndForget(t);
+      loadEmotionsFor(t.id);
     };
     try {
       const ok = await tryPrepare();
@@ -466,6 +514,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPrev = document.getElementById('btn-prev');
   const btnNext = document.getElementById('btn-next');
 
+  // Toggle repeat-one
+  btnRepeatOne?.addEventListener('click', () => {
+    repeatOne = !repeatOne;
+    applyRepeatOne(repeatOne);
+    localStorage.setItem('fs-repeat-one', JSON.stringify(repeatOne));
+  });
+
+  audio?.addEventListener('loadedmetadata', () => {
+    audio.loop = repeatOne;
+  });
+
+
   btnPlay?.addEventListener('click', async () => {
     if (!audio.src) {
       if (currentList.length) return playIndex(0);
@@ -504,12 +564,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (seekEl) seekEl.value = String(Math.floor((cur / 30) * 100));
   });
 
-  // Al terminar, avanzar en bucle a la siguiente
+  // Al terminar
   audio.addEventListener('ended', async () => {
+    // Si repeat-one está activo, audio reinicia automáticamente.
+    if (audio.loop) return;
+
     if (!currentList.length) return;
     const nextIndex = (currentIndex + 1) % currentList.length;
     await playIndex(nextIndex);
   });
+
 
   // Volumen
   if (volEl) {
@@ -585,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ? cand.contributors.map(c => c.name).filter(n => n && n !== main)
           : [];
 
-        t.id          = cand.id;
+        t.dz_id       = cand.id;
         t.preview     = cand.preview || '';
         t.duration    = cand.duration || 30;
         t.cover       = cand.album?.cover || t.cover || '';
