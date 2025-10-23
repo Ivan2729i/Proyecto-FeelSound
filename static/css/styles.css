@@ -302,3 +302,52 @@ html, body{
 /* Invertir color del icono reproductor */
 .img-placeholder { filter: invert(1) brightness(2); }
 
+
+/* Texto morado vivo con efecto */
+.fs-replay-link{
+  --vio1:#c084fc; /* violet-300 */
+  --vio2:#a855f7; /* fuchsia-500 */
+  --vio3:#7c3aed; /* violet-600 */
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+
+  background: linear-gradient(90deg,var(--vio1),var(--vio2),var(--vio3));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+
+  font-weight: 600;
+  transition: filter .2s ease, transform .12s ease;
+  cursor: pointer;
+}
+
+/* Brillito + micro-elevación */
+.fs-replay-link:hover{
+  filter: drop-shadow(0 0 8px rgba(168,85,247,.6));
+  transform: translateY(-1px);
+  animation: fs-replay-shine 2.2s linear infinite;
+}
+
+/* Subrayado animado */
+.fs-replay-link::after{
+  content:"";
+  position:absolute;
+  left:0; right:0; bottom:-2px;
+  height:2px;
+  background: linear-gradient(90deg, transparent, rgba(168,85,247,.95), transparent);
+  transform: translateX(-30%);
+  opacity:.0;
+  transition: opacity .2s ease, transform .35s ease;
+}
+.fs-replay-link:hover::after{
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@keyframes fs-replay-shine{
+  to { background-position: 200% 0; }
+}

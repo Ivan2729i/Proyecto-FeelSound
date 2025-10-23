@@ -13,6 +13,7 @@ urlpatterns = [
     path("login/", accounts_views.login_register_view, name="login"),
     path('accounts/', include('allauth.urls')),
     path('', include('home.urls')),
+    path("api/", include("api.urls")),
 ]
 
 if settings.DEBUG:

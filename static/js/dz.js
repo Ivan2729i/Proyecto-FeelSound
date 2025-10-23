@@ -17,11 +17,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const tTotEl      = document.getElementById('player-time-total');
   const volEl       = document.getElementById('player-volume');
   const moodLabel = document.getElementById('fs-mood-label');
+  const btnRepeatOne = document.getElementById('btn-repeat-one');
+  const emolistEl   = document.getElementById('fs-emotions');
 
 
   // Estado
   let currentList = [];
   let currentIndex = -1;
+
+  // === Repeat One (repetir solo la canción actual) ===
+  let repeatOne = JSON.parse(localStorage.getItem('fs-repeat-one') || 'false');
+  function applyRepeatOne(isOn) {
+    if (!audio) return;
+    audio.loop = isOn;
+    btnRepeatOne?.setAttribute('aria-pressed', String(isOn));
+    if (btnRepeatOne) {
+      btnRepeatOne.title = isOn ? 'Repetir esta canción (activo)' : 'Repetir esta canción';
+    }
+  }
+  applyRepeatOne(repeatOne);
+
 
   function dzUrlExpired(u) {
     try {
@@ -41,6 +56,89 @@ document.addEventListener('DOMContentLoaded', () => {
     const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
+
+  // --- Normalizador para el payload ---
+    function normalizeCapturePayload(input) {
+      if (!input || typeof input !== 'object') return null;
+
+      const id       = input.id ?? input.track_id ?? input.deezer_id ?? null;
+      const title    = (typeof input.title === 'string' ? input.title : (input.titulo || '')).trim();
+      const duration = Number(input.duration || input.duracion || 30) || 30;
+      const preview  = (input.preview || input.preview_url || '').toString();
+
+      // ARTISTA: permite string u objeto
+      let artistName = '';
+      let artistId   = null;
+      if (typeof input.artist === 'string') {
+        artistName = input.artist;
+      } else if (input.artist && typeof input.artist === 'object') {
+        const a = input.artist;
+        artistName = typeof a.name === 'string' ? a.name
+                   : (a.name && typeof a.name === 'object' && typeof a.name.name === 'string') ? a.name.name
+                   : (typeof a.title === 'string' ? a.title : '');
+        artistId = a.id ?? (a.name && a.name.id) ?? null;
+      } else if (typeof input.artista === 'string') {
+        artistName = input.artista;
+      }
+
+      // ÁLBUM: permite string u objeto
+      let albumTitle = '';
+      let albumId    = null;
+      let albumCover = '';
+      if (typeof input.album === 'string') {
+        albumTitle = input.album;
+      } else if (input.album && typeof input.album === 'object') {
+        const al = input.album;
+        albumTitle = typeof al.title === 'string' ? al.title
+                   : (al.title && typeof al.title === 'object' && typeof al.title.title === 'string') ? al.title.title
+                   : (typeof al.name === 'string' ? al.name : '');
+        albumId    = al.id ?? (al.title && al.title.id) ?? null;
+        albumCover = typeof al.cover === 'string' ? al.cover
+                   : (al.title && typeof al.title.cover === 'string') ? al.title.cover
+                   : (typeof input.cover === 'string' ? input.cover : '');
+      } else {
+        albumTitle = (input.album_title || input.albumName || '').toString();
+        albumCover = (input.cover || '').toString();
+      }
+
+      return {
+        id,
+        title,
+        duration,
+        preview,
+        artist: { id: artistId ?? undefined, name: artistName || '' },
+        album:  { id: albumId ?? undefined,  title: albumTitle || '—', cover: albumCover || '' },
+      };
+    }
+
+  // === Emociones por track ===
+    function renderEmotions(list) {
+      if (!emolistEl) return;
+      if (!Array.isArray(list) || !list.length) {
+        emolistEl.innerHTML = '<span class="text-white/50 text-sm">Sin etiquetas</span>';
+        return;
+        }
+      emolistEl.innerHTML = list.slice(0, 6).map(e => `
+        <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-white/10 text-white/80">
+          ${e.emocion} <span class="opacity-70">(${Number(e.score).toFixed(2)})</span>
+        </span>
+      `).join(' ');
+    }
+
+    async function loadEmotionsFor(trackId) {
+      if (!trackId) { renderEmotions([]); return; }
+      try {
+        const r = await fetch(`/api/v1/tracks/${trackId}/emotions`, { headers: { "Accept": "application/json" }});
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        // data = [{emocion:"Feliz", score:"0.92", source:"..."}, ...]
+        renderEmotions(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.warn('Emotions error:', err);
+        renderEmotions([]);
+      }
+    }
+
 
   // Línea de artistas para la tabla
   function artistsInlineText(t) {
@@ -135,45 +233,45 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function doSearch(q) {
-    if (!q) return;
-    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Buscando “${q}”…</td></tr>`;
-    try {
-      const res = await fetch(`/api/deezer/search/?type=track&q=${encodeURIComponent(q)}`);
-      const json = await res.json();
+      if (!q) return;
+      tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Buscando “${q}”…</td></tr>`;
+      try {
+        const res = await fetch(`/api/v1/tracks?query=${encodeURIComponent(q)}`, {
+          headers: { "Accept": "application/json" }
+        });
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.results || []);
 
-      const items = (json.data || []).map(x => {
-        const main = x.artist?.name || '';
-        const contribs = Array.isArray(x.contributors)
-          ? x.contributors.map(c => c.name).filter(n => n && n !== main)
-          : [];
-        return {
+        const items = list.map(x => ({
           id: x.id,
-          title: x.title,
-          duration: x.duration,
-          preview: x.preview,
-          artist: main,
-          contributors: contribs,
-          album: x.album?.title || '',
-          cover: x.album?.cover || ''
-        };
-      });
+          title: x.titulo || '',
+          duration: x.duracion || 30,
+          preview: x.preview_url || '',
+          artist: x.artista || '',
+          contributors: [],
+          album: x.album || '',
+          cover: x.cover || '',
+          top_emocion: x.top_emocion || null
+        }));
 
-      currentList = items;
-      currentIndex = -1;
+        currentList = items;
+        currentIndex = -1;
 
-      if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Sin resultados.</td></tr>`;
-        return;
+        if (!items.length) {
+          tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Sin resultados.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = items.map(formatRow).join('');
+        wireRows();
+
+        localStorage.setItem('fs_last_query', q);
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-red-300">Error: ${err}</td></tr>`;
       }
-
-      tbody.innerHTML = items.map(formatRow).join('');
-      wireRows();
-      enrichContributors(currentList);
-      localStorage.setItem('fs_last_query', q);
-    } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-red-300">Error: ${err}</td></tr>`;
-    }
   }
+
 
   // Completa contributors pidiendo /track/:id y actualiza la línea visual
   async function enrichContributors(list) {
@@ -254,20 +352,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tTotEl)  tTotEl.textContent = mmss(30); // previews ~30s
     if (seekEl)  seekEl.value = 0;
 
+    renderEmotions([]);
     return true;
   }
 
   // --- Captura sin bloquear la reproducción ---
-  function captureTrackFireAndForget(t) {
+  function captureTrackFireAndForget(trackLike) {
     try {
-      const payload = {
-        id: t.id,
-        title: t.title,
-        duration: t.duration || 30,
-        preview: t.preview || '',
-        artist: { name: t.artist || '' },
-        album:  { title: t.album || '', cover: t.cover || '' }
-      };
+      const payload = normalizeCapturePayload(trackLike);
+      if (!payload || !payload.id || !payload.title) return;
 
       if (navigator.sendBeacon) {
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
@@ -278,9 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
           keepalive: true,
-        }).catch(()=>{});
+        }).catch(() => {});
       }
-    } catch(_) {}
+    } catch (_) {}
   }
 
   async function playIndex(idx, fromUserGesture = false) {
@@ -300,11 +393,13 @@ document.addEventListener('DOMContentLoaded', () => {
             setPlayUI(true);
             prefetchNext();
             captureTrackFireAndForget(t);
+            loadEmotionsFor(t.id);
           });
         } else {
           setPlayUI(true);
           prefetchNext();
           captureTrackFireAndForget(t);
+          loadEmotionsFor(t.id); // cargar emociones del track actual
           return Promise.resolve();
         }
       };
@@ -320,6 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
           setPlayUI(true);
           prefetchNext();
           captureTrackFireAndForget(t);
+          loadEmotionsFor(t.id); // cargar emociones del track actual
         } catch {
           setPlayUI(false);
           alert('No se pudo reproducir el preview. Prueba con otra pista.');
@@ -352,6 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setPlayUI(true);
       prefetchNext();
       captureTrackFireAndForget(t);
+      loadEmotionsFor(t.id);
     };
     try {
       const ok = await tryPrepare();
@@ -417,6 +514,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPrev = document.getElementById('btn-prev');
   const btnNext = document.getElementById('btn-next');
 
+  // Toggle repeat-one
+  btnRepeatOne?.addEventListener('click', () => {
+    repeatOne = !repeatOne;
+    applyRepeatOne(repeatOne);
+    localStorage.setItem('fs-repeat-one', JSON.stringify(repeatOne));
+  });
+
+  audio?.addEventListener('loadedmetadata', () => {
+    audio.loop = repeatOne;
+  });
+
+
   btnPlay?.addEventListener('click', async () => {
     if (!audio.src) {
       if (currentList.length) return playIndex(0);
@@ -455,12 +564,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (seekEl) seekEl.value = String(Math.floor((cur / 30) * 100));
   });
 
-  // Al terminar, avanzar en bucle a la siguiente
+  // Al terminar
   audio.addEventListener('ended', async () => {
+    // Si repeat-one está activo, audio reinicia automáticamente.
+    if (audio.loop) return;
+
     if (!currentList.length) return;
     const nextIndex = (currentIndex + 1) % currentList.length;
     await playIndex(nextIndex);
   });
+
 
   // Volumen
   if (volEl) {
@@ -502,15 +615,20 @@ document.addEventListener('DOMContentLoaded', () => {
         neutral: 'Neutral',
     };
 
-    async function captureDeezerTrack(trackObj) {
+    async function captureDeezerTrack(trackLike) {
       try {
-        const r = await fetch(ROUTES.captureTrack, {
+        const payload = normalizeCapturePayload(trackLike);
+        if (!payload || !payload.id || !payload.title) return null;
+
+        const r = await fetch('/api/capture/deezer-track', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(trackObj)
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
-        return await r.json().catch(()=>null);
-      } catch { return null; }
+        return await r.json().catch(() => null);
+      } catch {
+        return null;
+      }
     }
 
     async function ensurePreviewFor(index, force=false) {
@@ -531,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ? cand.contributors.map(c => c.name).filter(n => n && n !== main)
           : [];
 
-        t.id          = cand.id;
+        t.dz_id       = cand.id;
         t.preview     = cand.preview || '';
         t.duration    = cand.duration || 30;
         t.cover       = cand.album?.cover || t.cover || '';
@@ -554,7 +672,71 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Cargar y pintar la tabla usando tu mismo formato
+    // --- Reproducir un item del historial ---
+    window.replayRecent = async function replayRecent(rec) {
+      try {
+        let d = null;
+        try {
+          d = await fetch(`/api/deezer/track/${rec.id}/`).then(r => r.json());
+        } catch (_) { d = null; }
+
+        let candidate = null;
+        if (d && (d.preview || d.preview_url || d.previewURL)) {
+          const main = d.artist?.name || (rec.artists || '').split(',')[0] || '';
+          candidate = {
+            id: d.id || rec.id,
+            title: d.title || rec.title,
+            duration: d.duration || 30,
+            preview: d.preview || d.preview_url || d.previewURL || '',
+            artist: main,
+            contributors: Array.isArray(d.contributors) ? d.contributors.map(c=>c.name) : [],
+            album: d.album?.title || '',
+            cover: d.album?.cover || rec.cover || ''
+          };
+        }
+
+        if (!candidate || !candidate.preview) {
+          const firstArtist = (rec.artists || '').split(',')[0] || '';
+          const q = [rec.title, firstArtist].filter(Boolean).join(' ');
+          const res = await fetch(`/api/deezer/search/?type=track&q=${encodeURIComponent(q)}`);
+          const json = await res.json().catch(()=>({}));
+          const list = (json.data || []).filter(x => !!x.preview);
+
+          if (list.length) {
+            const x = list[0];
+            const main = x.artist?.name || firstArtist;
+            const contribs = Array.isArray(x.contributors)
+              ? x.contributors.map(c => c.name).filter(n => n && n !== main)
+              : [];
+            candidate = {
+              id: x.id,
+              title: x.title || rec.title,
+              duration: x.duration || 30,
+              preview: x.preview || '',
+              artist: main,
+              contributors: contribs,
+              album: x.album?.title || '',
+              cover: x.album?.cover || rec.cover || ''
+            };
+          }
+        }
+
+        if (!candidate || !candidate.preview) {
+          alert('No se encontró un preview reproducible para esta canción.');
+          return;
+        }
+
+        currentList = [candidate];
+        currentIndex = -1;
+        await playIndex(0, /*fromUserGesture=*/true);
+      } catch (err) {
+        console.error('replayRecent error:', err);
+        alert('No se pudo reproducir esta canción del historial.');
+      }
+    };
+
+
+    // Cargar la tabla
     async function loadEmotionList(emocionClave) {
       tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Cargando ${emocionClave}…</td></tr>`;
       try {
@@ -586,7 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Barra de emojis → recordar selección, marcar activo, actualizar label y cargar lista
+    // Barra de emojis
     (function initEmojiBar(){
       const row = document.getElementById('fs-emoji-row');
       if (!row) return;
@@ -625,6 +807,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
       setActiveMood(startKey);
     })();
-
 
 });

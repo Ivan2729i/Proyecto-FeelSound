@@ -254,23 +254,8 @@
       <div class="rounded-2xl bg-white/5 backdrop-blur border border-white/10 p-5">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-white/90 font-semibold">Reproducidas recientemente</h2>
-          <span class="text-xs text-white/50">Mostrando 3</span>
         </div>
-
         <div id="pf-recent-list" class="divide-y divide-white/10">
-          <!-- items dinámicos -->
-          <!--
-          <div class="flex items-center justify-between py-3 gap-3">
-            <div class="flex items-center gap-3 min-w-0">
-              <img src="..." class="w-10 h-10 rounded-lg object-cover bg-white/10" alt="">
-              <div class="min-w-0">
-                <div class="text-white truncate">Título</div>
-                <div class="text-white/60 text-sm truncate">Artista</div>
-              </div>
-            </div>
-            <button class="text-[#B5179E] hover:opacity-80 text-sm shrink-0">Reproducir nuevamente</button>
-          </div>
-          -->
         </div>
       </div>
     </section>
@@ -347,6 +332,22 @@
                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="5 4 15 12 5 20 5 4"></polygon>
                 <line x1="19" y1="5" x2="19" y2="19"></line>
+              </svg>
+            </button>
+            <!-- Botón repeat-one -->
+            <button
+              id="btn-repeat-one"
+              type="button"
+              aria-pressed="false"
+              title="Repetir esta canción"
+              class="relative inline-flex h-9 w-9 items-center justify-center rounded-full
+                     transition-transform duration-150 ease-out opacity-80
+                     hover:opacity-100 hover:scale-[1.04]
+                     aria-pressed:bg-white/10 cursor-pointer">
+              <svg viewBox="0 0 24 24" aria-hidden="true"
+                   class="h-[18px] w-[18px] text-white aria-pressed:text-white "
+                   fill="currentColor">
+                <path d="M17 1l4 4-4 4V6H7a3 3 0 000 6h2v2H7a5 5 0 110-10h10V1zM7 23l-4-4 4-4v3h10a3 3 0 000-6h-2v-2h2a5 5 0 010 10H7v3z"/>
               </svg>
             </button>
           </div>
