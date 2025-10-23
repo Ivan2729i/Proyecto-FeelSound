@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from home.models import Cancion, CancionEmocion
+from django.contrib.auth import get_user_model
+
 
 class CancionSerializer(serializers.ModelSerializer):
     artista = serializers.CharField(source="artista.nombre", read_only=True)
@@ -28,3 +30,39 @@ class CancionEmocionSerializer(serializers.ModelSerializer):
         model = CancionEmocion
         fields = ["emocion", "score", "source"]
 
+
+User = get_user_model()
+
+class MeSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "username", "email", "first_name", "last_name",
+            "date_joined", "bio", "avatar_url"
+        ]
+        extra_kwargs = {
+            "username": {"required": False},
+            "bio": {"required": False, "allow_blank": True},
+            "first_name": {"required": False, "allow_blank": True},
+            "last_name": {"required": False, "allow_blank": True},
+        }
+
+    def get_avatar_url(self, obj):
+        if getattr(obj, "profile_picture", None):
+            try:
+                url = obj.profile_picture.url
+                if url:
+                    return url
+            except Exception:
+                pass
+        try:
+            sa = obj.socialaccount_set.filter(provider="google").first()
+            pic = (sa.extra_data or {}).get("picture") if sa else ""
+            if pic:
+                return pic
+        except Exception:
+            pass
+        # sin foto
+        return ""

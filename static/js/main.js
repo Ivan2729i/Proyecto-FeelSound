@@ -52,6 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// CSRF helper
+function getCookie(name) {
+  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return m ? m.pop() : '';
+}
+const CSRF = getCookie('csrftoken');
+
+
 // --- Toasts auto-cierre + animación ---
 document.addEventListener('DOMContentLoaded', () => {
   const toasts = document.querySelectorAll('.toast-msg');
@@ -157,13 +165,251 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
       .replace(/</g,'&lt;')
       .replace(/>/g,'&gt;');
 
+  // ===== Datos de usuario real (perfil) =====
+    let pfBootstrapped = false;
+
+    function fmtJoined(iso) {
+      try {
+        return new Intl.DateTimeFormat('es-MX', { day:'numeric', month:'long', year:'numeric' })
+          .format(new Date(iso));
+      } catch { return '—'; }
+    }
+
+    async function fetchMe() {
+      const r = await fetch('/api/v1/me', { credentials: 'include' });
+      if (!r.ok) throw new Error('No se pudo cargar el perfil');
+      return r.json();
+    }
+
+    function paintUser(me) {
+      const avatarEl = document.getElementById('pf-avatar');
+      const nameEl   = document.getElementById('pf-name');
+      const userEl   = document.getElementById('pf-username');
+      const bioEl    = document.getElementById('pf-bio');
+      const emailEl  = document.getElementById('pf-email');
+      const memberEl = document.getElementById('pf-member-since');
+
+      // Nombre visible
+      const full = `${me.first_name ?? ''} ${me.last_name ?? ''}`.trim();
+      nameEl.textContent = full || me.username;
+
+      // Username, bio, email
+      userEl.textContent = me.username ?? '';
+      bioEl.textContent  = (me.bio ?? '').trim() || 'Amante de la música';
+      emailEl.textContent= me.email ?? '';
+
+      // Miembro desde
+      const tplISO = memberEl.dataset.joined;
+      memberEl.textContent = fmtJoined(me.date_joined || tplISO);
+
+      const def = avatarEl.dataset.defaultSrc || avatarEl.getAttribute('src');
+      const google = avatarEl.dataset.googlePhoto;
+      const chosen = me.avatar_url || google || def;
+      avatarEl.src = chosen || def;
+    }
+
+    // Modal editar
+    function bindEditModal() {
+      const modal     = document.getElementById('pf-edit-modal');
+      const btnOpen   = document.getElementById('pf-edit-btn');
+      const btnCancel = document.getElementById('pf-cancel');
+      const form      = document.getElementById('pf-edit-form');
+
+      const inpUser   = document.getElementById('pf-inp-username');
+      const inpBio    = document.getElementById('pf-inp-bio');
+      const inpAvatar = document.getElementById('pf-inp-avatar');
+      const errUser   = document.getElementById('pf-username-error');
+
+      // avatar UI
+      const drop      = document.getElementById('pf-drop');
+      const preview   = document.getElementById('pf-edit-preview');
+      const fileName  = document.getElementById('pf-file-name');
+      const clearBtn  = document.getElementById('pf-clear-avatar');
+      const errAvatar = document.getElementById('pf-avatar-error');
+      const saveBtn   = document.getElementById('pf-save-btn');
+
+      if (!btnOpen || !form) return;
+
+      const MAX_MB = 3;
+      const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+      function setPreviewFromCurrent() {
+        const current = document.getElementById('pf-avatar')?.src;
+        preview.src = current || '';
+        fileName.textContent = 'PNG/JPG · máx 3 MB';
+        errAvatar.classList.add('hidden');
+      }
+
+      function open() {
+        const curUser = (document.getElementById('pf-username')?.textContent || '').trim();
+        const curBio  = (document.getElementById('pf-bio')?.textContent || '').trim();
+        inpUser.value = curUser;
+        inpBio.value  = (curBio === 'Amante de la música') ? '' : curBio;
+
+        setPreviewFromCurrent();
+        if (inpAvatar) inpAvatar.value = '';
+        errUser.classList.add('hidden');
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+
+      function close() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        if (inpAvatar) inpAvatar.value = '';
+      }
+
+      function handleFile(file) {
+        errAvatar.classList.add('hidden');
+
+        if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.type)) {
+          errAvatar.textContent = 'Formato no soportado. Usa PNG/JPG/WEBP/GIF.';
+          errAvatar.classList.remove('hidden');
+          if (inpAvatar) inpAvatar.value = '';
+          return;
+        }
+        if (file.size > MAX_BYTES) {
+          errAvatar.textContent = `La imagen supera ${MAX_MB} MB.`;
+          errAvatar.classList.remove('hidden');
+          if (inpAvatar) inpAvatar.value = '';
+          return;
+        }
+        fileName.textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = () => { preview.src = reader.result; };
+        reader.readAsDataURL(file);
+      }
+
+      // Click en toda la dropzone abre selector
+      drop.addEventListener('click', (e) => {
+        if (e.target.closest('#pf-clear-avatar')) return;
+
+        if (e.target.closest('label[for="pf-inp-avatar"]')) return;
+
+        if (inpAvatar) inpAvatar.value = '';
+        inpAvatar?.click();
+      });
+
+      ['dragenter','dragover'].forEach(ev=>{
+        drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.add('ring-2','ring-white/30'); });
+      });
+      ['dragleave','drop'].forEach(ev=>{
+        drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.remove('ring-2','ring-white/30'); });
+      });
+      drop.addEventListener('drop', e=>{
+        const f = e.dataTransfer.files?.[0];
+        if (f) { if (inpAvatar) inpAvatar.files = e.dataTransfer.files; handleFile(f); }
+      });
+
+      const labelPicker = document.querySelector('label[for="pf-inp-avatar"]');
+      labelPicker?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (inpAvatar) inpAvatar.value = '';
+      });
+
+      inpAvatar?.addEventListener('change', ()=>{
+        const f = inpAvatar.files?.[0];
+        if (f) handleFile(f);
+      });
+
+      // Quitar selección
+      clearBtn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        if (inpAvatar) inpAvatar.value = '';
+        setPreviewFromCurrent();
+      });
+
+      btnOpen.addEventListener('click', open);
+      btnCancel?.addEventListener('click', close);
+
+      // Guardar
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errUser.classList.add('hidden');
+
+        const oldText = saveBtn.textContent;
+        saveBtn.textContent = 'Guardando…';
+        saveBtn.disabled = true;
+
+        const curUser = (document.getElementById('pf-username')?.textContent || '').trim();
+        const curBio  = (document.getElementById('pf-bio')?.textContent || '').trim();
+        const newUser = inpUser.value.trim();
+        const newBio  = inpBio.value.trim();
+
+        const needPatch  = (newUser && newUser !== curUser) || (newBio !== '' && newBio !== curBio);
+        const needUpload = !!(inpAvatar && inpAvatar.files && inpAvatar.files.length);
+
+        try {
+          if (needPatch) {
+            const r = await fetch('/api/v1/me', {
+              method: 'PATCH',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+              body: JSON.stringify({
+                ...(newUser && newUser !== curUser ? { username: newUser } : {}),
+                ...(newBio  !== curBio           ? { bio: newBio } : {}),
+              }),
+            });
+            if (!r.ok) {
+              const data = await r.json().catch(()=> ({}));
+              const msg = data?.username?.[0] || data?.detail || 'No se pudo actualizar.';
+              errUser.textContent = msg;
+              errUser.classList.remove('hidden');
+              return;
+            }
+            if (newUser && newUser !== curUser) document.getElementById('pf-username').textContent = newUser;
+            document.getElementById('pf-bio').textContent = (newBio || '').trim() || 'Amante de la música';
+          }
+
+          if (needUpload) {
+            const fd = new FormData();
+            fd.append('avatar', inpAvatar.files[0]);
+            const up = await fetch('/api/v1/me/avatar', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'X-CSRFToken': CSRF },
+              body: fd,
+            });
+            if (!up.ok) {
+              const data = await up.json().catch(()=> ({}));
+              errUser.textContent = data?.detail || 'No se pudo subir la imagen.';
+              errUser.classList.remove('hidden');
+              return;
+            }
+            const { avatar_url } = await up.json().catch(()=> ({}));
+            if (avatar_url) {
+              const avatarEl = document.getElementById('pf-avatar');
+              avatarEl.src = avatar_url + (avatar_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+            }
+          }
+
+          close();
+        } finally {
+          saveBtn.textContent = oldText;
+          saveBtn.disabled = false;
+        }
+      });
+    }
+
+    async function ensureProfileBootstrapped() {
+      if (pfBootstrapped) return;
+      pfBootstrapped = true;
+      bindEditModal();
+      try {
+        const me = await fetchMe();
+        paintUser(me);
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
   function renderProfile() {
     const stats = loadStats();
 
     document.getElementById('pf-listen-time').textContent    = formatListen(stats.listening_ms_total || 0);
     document.getElementById('pf-fav-mood').textContent       = favMood(stats.mood_counts);
     document.getElementById('pf-total-plays').textContent    = stats.total_plays || 0;
-    document.getElementById('pf-library-count').textContent  = stats.library_count ?? 0;
 
     // Favoritos
     const favEl = document.getElementById('pf-fav-count');
@@ -225,7 +471,10 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     setActive($navPerfil, isProfile);
     setActive($navDash, !isProfile);
 
-    if (isProfile) renderProfile();
+    if (isProfile) {
+      ensureProfileBootstrapped();
+      renderProfile();
+    }
   }
 
   function routeFromHash() {
