@@ -72,6 +72,7 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
+                'accounts.context_processors.hcaptcha_context',
                 'django.contrib.messages.context_processors.messages',
             ],
         },
@@ -186,6 +187,21 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
 }
+
+
+# Configuración del Captcha
+HCAPTCHA_SITE_KEY  = config("HCAPTCHA_SITE_KEY", default="")
+HCAPTCHA_SECRET_KEY = config("HCAPTCHA_SECRET_KEY", default="")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "fs-cache",
+    }
+}
+
+ACCOUNT_ADAPTER = "accounts.adapters.FeelSoundAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "accounts.adapters.CustomSocialAccountAdapter"
 
 
 

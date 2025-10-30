@@ -236,23 +236,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!q) return;
       tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Buscando “${q}”…</td></tr>`;
       try {
-        const res = await fetch(`/api/v1/tracks?query=${encodeURIComponent(q)}`, {
+        const res = await fetch(`/api/deezer/search/?type=track&q=${encodeURIComponent(q)}`, {
           headers: { "Accept": "application/json" }
         });
         if (!res.ok) throw new Error(`API ${res.status}`);
         const data = await res.json();
-        const list = Array.isArray(data) ? data : (data.results || []);
+        const list = Array.isArray(data?.data) ? data.data : [];
 
         const items = list.map(x => ({
           id: x.id,
-          title: x.titulo || '',
-          duration: x.duracion || 30,
-          preview: x.preview_url || '',
-          artist: x.artista || '',
-          contributors: [],
-          album: x.album || '',
-          cover: x.cover || '',
-          top_emocion: x.top_emocion || null
+          title: x.title || '',
+          duration: x.duration || 30,
+          preview: x.preview || '',
+          artist: x.artist?.name || '',
+          contributors: Array.isArray(x.contributors) ? x.contributors.map(c => c.name).filter(Boolean) : [],
+          album: x.album?.title || '',
+          cover: x.album?.cover || '',
+          top_emocion: null
         }));
 
         currentList = items;
@@ -265,12 +265,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.innerHTML = items.map(formatRow).join('');
         wireRows();
-
+        enrichContributors(currentList);
         localStorage.setItem('fs_last_query', q);
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-red-300">Error: ${err}</td></tr>`;
+        console.error('[FS] Error en doSearch', err);
       }
   }
+
 
 
   // Completa contributors pidiendo /track/:id y actualiza la línea visual
@@ -589,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupMarquee(artistWrap);
   });
 
-  // --- Búsqueda automática inicial (última o por defecto) ---
+  // --- Búsqueda automática inicial ---
   const LAST_Q_KEY = 'fs_last_query';
   const initialQ = localStorage.getItem(LAST_Q_KEY) || 'bad bunny';
   // doSearch(initialQ);

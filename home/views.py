@@ -18,7 +18,6 @@ from django.conf import settings
 DEEZER_API = "https://api.deezer.com"
 
 def _dz_get(path: str, params=None, timeout=7):
-    """GET sencillo a Deezer con manejo básico de errores."""
     try:
         r = requests.get(f"{DEEZER_API}{path}", params=params or {}, timeout=timeout)
         r.raise_for_status()
@@ -27,7 +26,6 @@ def _dz_get(path: str, params=None, timeout=7):
         return {}
 
 def _enrich_artist(artista, dz_id: str | None):
-    """Completa imagen_url y fans_deezer si falta info y tenemos deezer_id."""
     if not dz_id or not artista:
         return artista
     data = _dz_get(f"/artist/{dz_id}") or {}
@@ -43,7 +41,6 @@ def _enrich_artist(artista, dz_id: str | None):
     return artista
 
 def _enrich_album(album, dz_id: str | None):
-    """Completa portada_url y fecha_lanzamiento si falta info y tenemos deezer_id."""
     if not dz_id or not album:
         return album
     data = _dz_get(f"/album/{dz_id}") or {}
@@ -65,7 +62,7 @@ def dashboard(request):
 @require_GET
 def dz_search(request):
     q = request.GET.get("q", "").strip()
-    t = request.GET.get("type", "track").strip()  # tipo de búsqueda: track, artist, album
+    t = request.GET.get("type", "track").strip()
     if not q:
         return HttpResponseBadRequest("Missing q")
 
@@ -136,14 +133,13 @@ def songs_by_emotion(request):
     data = []
     for s in qs:
         data.append({
-            # usa el deezer_id para que tu player funcione igual
             "id": int(s.deezer_id) if s.deezer_id and s.deezer_id.isdigit() else s.id,
             "titulo": s.titulo,
             "duracion": s.duracion or 30,
-            "preview": s.preview_url or "",              # <-- importante
+            "preview": s.preview_url or "",
             "artista": s.artista.nombre if s.artista else "",
             "album": s.album.titulo if s.album else "",
-            "cover": s.album.portada_url if s.album else "",  # <-- importante
+            "cover": s.album.portada_url if s.album else "",
             "top_emocion": emo.clave,
         })
 

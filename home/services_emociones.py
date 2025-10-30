@@ -14,7 +14,6 @@ MIN_MARGIN      = 0.04
 NEUTRAL_STEAL   = 0.16
 NON_NEU_PRIOR   = 0.02
 NEU_CAP_GAP     = 0.08
-# Mezcla de modelos en ES (pysentimiento + goemotions)
 W_ES_PYS        = 0.60
 W_ES_GOEMO      = 0.40
 

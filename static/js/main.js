@@ -6,6 +6,34 @@ function getStatsKey() {
   return `fs_profile_stats_v1${email ? '::' + email : (userId ? '::' + userId : '')}`;
 }
 
+// ==== hCaptcha boot global (debe ir ANTES de cualquier DOMContentLoaded) ====
+window.__fsCaptcha = {
+  ready: false,
+  rendered: { reg: false, login: false }
+};
+
+function __fsTryRender(idKey) {
+  if (!window.__fsCaptcha.ready) return;
+  const map = { reg: 'reg-captcha', login: 'login-captcha' };
+  const domId = map[idKey];
+  const el = document.getElementById(domId);
+  if (!el || window.__fsCaptcha.rendered[idKey]) return;
+
+  const sitekey = el.dataset.sitekey || '';
+  if (!sitekey || !window.hcaptcha) return;
+
+  window.hcaptcha.render(domId, { sitekey });
+  window.__fsCaptcha.rendered[idKey] = true;
+}
+
+// Callback GLOBAL llamado por hCaptcha (?onload=onHcaptchaLoad)
+window.onHcaptchaLoad = function onHcaptchaLoad() {
+  window.__fsCaptcha.ready = true;
+  __fsTryRender('reg');
+  __fsTryRender('login');
+};
+
+
 
 document.addEventListener('DOMContentLoaded', () => {
     const loginTab = document.getElementById('login-tab');
@@ -26,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Estilos para la pestaña de Registro (Inactiva)
         registerTab.classList.remove('bg-[#4285F4]', 'text-white');
         registerTab.classList.add('text-gray-400');
+        __fsTryRender('login');
     }
 
     function showRegister() {
@@ -39,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Estilos para la pestaña de Login (Inactiva)
         loginTab.classList.remove('bg-[#4285F4]', 'text-white');
         loginTab.classList.add('text-gray-400');
+        __fsTryRender('reg');
     }
 
     loginTab.addEventListener('click', showLogin);
@@ -46,10 +76,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Activa la pestaña correcta al cargar la página
     if (activeTab === 'register') {
-        showRegister();
+      showRegister();
+      __fsTryRender('reg');
     } else {
-        showLogin();
+      showLogin();
+      __fsTryRender('login');
     }
+
 });
 
 // CSRF helper

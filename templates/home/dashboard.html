@@ -8,14 +8,19 @@
 <!-- TOPBAR -->
 <header id="fs-topbar" class="sticky top-0 z-40 w-full border-b border-white/10 bg-[#0B1E5B]/90 backdrop-blur">
   <div class="px-4 sm:px-5 lg:px-8 h-16 flex items-center gap-3 sm:gap-6">
-    <!-- Logo -->
-    <a href="{% url 'home:dashboard' %}" class="flex items-center gap-2 shrink-0">
-      <span aria-hidden="true" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-500/15">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 3a9 9 0 0 0-9 9v6a3 3 0 0 0 3 3h1a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5v-1a7 7 0 0 1 14 0v1h-2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1a3 3 0 0 0 3-3v-6a9 9 0 0 0-9-9z"/>
-        </svg>
+    <!-- Logo Dashboard -->
+    <a href="{% url 'home:dashboard' %}" class="flex items-center gap-3 shrink-0 group" aria-label="Ir al dashboard">
+      <!-- Marca / ícono -->
+      <img
+        src="{% static 'img/logo_feelsound4.svg' %}"
+        alt=""
+        class="block h-10 w-auto md:h-10 lg:h-11 transition-transform duration-200 group-hover:scale-[1.03]"
+        loading="lazy"
+      />
+      <!-- Wordmark -->
+      <span class="text-white text-2xl md:text-3xl font-extrabold tracking-tight leading-none">
+        Feel<span class="text-white/90">Sound</span>
       </span>
-      <span class="text-white text-2xl md:text-3xl font-extrabold tracking-tight hover:opacity-90">FeelSound</span>
     </a>
 
     <!-- Menú móvil -->
@@ -249,7 +254,6 @@
 
             <div class="flex items-center gap-4 text-white/80">
               <span class="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/10">
-                <!-- Calendar (outline) -->
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round"
                         d="M8 2.75v2.5M16 2.75v2.5M3.75 9.5h16.5M5.25 5.25h13.5A2.25 2.25 0 0121 7.5v9A2.25 2.25 0 0118.75 18.75H5.25A2.25 2.25 0 013 16.5v-9A2.25 2.25 0 015.25 5.25z" />
@@ -294,6 +298,34 @@
         </div>
         <div id="pf-recent-list" class="divide-y divide-white/10">
         </div>
+      </div>
+    </section>
+
+    <!-- === VIEW: Mis Playlists === -->
+    <section id="view-playlists" class="space-y-6" hidden>
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold text-white">Mis Listas de Reproducción</h1>
+          <p class="text-white/60 text-sm">Tus playlists personales</p>
+        </div>
+        <a href="#/playlist/new"
+           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl btn-fs btn-fs--hover-purple">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 11V6h2v5h5v2h-5v5h-2v-5H6v-2z"/></svg>
+          Nueva playlist
+        </a>
+      </div>
+
+      <!-- Contenedor de tarjetas -->
+      <div id="pl-list" class="space-y-6"></div>
+
+      <!-- Estado vacío -->
+      <div id="pl-empty" class="hidden rounded-2xl bg-white/5 backdrop-blur border border-white/10 p-10 text-center">
+        <h3 class="text-white/90 font-semibold">Aún no tienes playlists</h3>
+        <p class="text-white/60 mt-1">Crea tu primera lista para empezar a organizar tu música.</p>
+        <a href="#/playlist/new"
+           class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-fs btn-fs--hover-purple">
+          Crear playlist
+        </a>
       </div>
     </section>
 
@@ -484,5 +516,6 @@
 
 {% block scripts %}
 <script src="{% static 'js/main.js' %}"></script>
+<script src="{% static 'js/playlists.js' %}"></script>
 <script src="{% static 'js/dz.js' %}"></script>
 {% endblock %}
