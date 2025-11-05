@@ -1,0 +1,17 @@
+{
+  "name": "feelsound-frontend",
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "http-server": "^14.1.1",
+    "tailwindcss": "^4.1.14",
+    "@tailwindcss/cli": "^4.1.14"
+  },
+  "scripts": {
+    "serve": "http-server -p 5500 -c-1 .",
+    "tw:watch": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --watch",
+    "tw:build": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --minify",
+    "dev": "concurrently \"npm:serve\" \"npm:tw:watch\"",
+    "preview": "npm run tw:build && http-server -p 5500 ."
+  }
+}

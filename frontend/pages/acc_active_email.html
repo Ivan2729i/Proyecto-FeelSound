@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#0f172a;font-family:Montserrat,Arial,sans-serif;color:#e5e7eb;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+                 style="width:600px;max-width:100%;background:#1f2b46;border:1px solid #3E4E71;border-radius:16px;padding:32px;">
+            <tr>
+              <td>
+                <p style="margin:0 0 12px 0;">
+                  Hola <strong>{{ user.first_name|default:user.username }}</strong>,
+                </p>
+
+                <p style="margin:0 0 16px 0;color:#cbd5e1;">
+                  Gracias por registrarte. Para activar tu cuenta haz clic aquí:
+                </p>
+
+                <p style="margin:0 0 20px 0;">
+                  <a href="{{ activation_link }}"
+                     style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">
+                    Activar mi cuenta
+                  </a>
+                </p>
+
+                <p style="margin:0 0 8px 0;color:#cbd5e1;">
+                  Si el botón no funciona, copia y pega este enlace en tu navegador:
+                </p>
+
+                <p style="margin:0;color:#93c5fd;word-break:break-all;">
+                  <a href="{{ activation_link }}" style="color:#93c5fd;text-decoration:none;">
+                    {{ activation_link }}
+                  </a>
+                </p>
+
+                <p style="margin:20px 0 0 0;">Si no te registraste en FeelSound, por favor ignora este mensaje.</p>
+                <p style="margin:8px 0 0 0;">¡Gracias!<br>El equipo de FeelSound</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

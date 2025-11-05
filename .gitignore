@@ -2,7 +2,7 @@
 .venv/
 venv/
 env/
-.env
+backend/.env
 
 
 # Python
@@ -21,7 +21,7 @@ build/
 # Django
 *.sqlite3
 db.sqlite3
-/media/
+/backend/media/
 /staticfiles/
 *.log
 *.pot
