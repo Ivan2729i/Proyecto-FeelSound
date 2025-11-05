@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login FeelSound</title>
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CLI build -->
+  <link rel="stylesheet" href="../static/css/output.css">
+  <link rel="stylesheet" href="../static/css/styles.css">
+  <!-- Prefetch Deezer -->
+  <link rel="dns-prefetch" href="https://cdnt-preview.dzcdn.net">
+  <link rel="preconnect" href="https://cdnt-preview.dzcdn.net" crossorigin>
+  <link rel="dns-prefetch" href="https://cdn-images.dzcdn.net">
+  <link rel="preconnect" href="https://cdn-images.dzcdn.net" crossorigin>
+</head>
+
+<body class="bg-gray-900">
+  <div id="toast-root" class="fixed top-6 left-0 right-0 z-[9999] flex justify-center px-4">
+    <div class="flex flex-col gap-3 w-full max-w-md"><!-- mensajes dinámicos aquí --></div>
+  </div>
+
+  <!-- ======= LOGIN/REGISTER ======= -->
+  <div class="flex flex-col items-center justify-center min-h-screen bg-fs-dif">
+
+    <div class="mb-8">
+      <div class="flex items-center justify-center gap-4 md:gap-5">
+        <img
+          src="../static/img/logo_feelsound4.svg"
+          alt="Logo FeelSound"
+          class="block shrink-0 h-20 md:h-28 lg:h-32 xl:h-36"
+          loading="lazy"/>
+        <h1 class="text-5xl md:text-6xl lg:text-7xl leading-tight font-bold text-white">
+          FeelSound
+        </h1>
+      </div>
+      <p class="text-[#8e9bb5] mt-2 text-lg text-center">El sonido de tus Emociones</p>
+    </div>
+
+    <div class="w-full max-w-md p-8 space-y-6 bg-[#2B3A5A]/50 backdrop-blur-xl rounded-2xl shadow-lg border border-[#3E4E71]">
+
+      <!-- Tabs -->
+      <div class="flex bg-[#2B3A5A] rounded-lg p-1">
+        <button id="login-tab" class="flex-1 py-2 text-sm font-semibold text-white bg-[#4285F4] rounded-lg">
+          Iniciar Sesión
+        </button>
+        <button id="register-tab" class="flex-1 py-2 text-sm font-semibold text-gray-400 rounded-lg">
+          Registrarse
+        </button>
+      </div>
+
+      <!-- Form: Login -->
+      <div id="login-form" class="space-y-6">
+        <form id="fs-login-form" method="post" action="#">
+          <div>
+            <label for="id_username" class="block mb-2 mt-4 text-sm font-medium text-white">
+              Email o Nombre de Usuario
+            </label>
+            <input id="id_username" type="text" name="username" placeholder="Email o @usuario"
+                   class="w-full px-4 py-3 bg-[#2B3A5A] border border-[#3E4E71] rounded-lg
+                          text-white placeholder-[#8e9bb5] focus:outline-none focus:ring-2
+                          focus:ring-[#4285F4]">
+            <!-- aquí podrías renderizar errores con JS -->
+          </div>
+
+          <!-- Contraseña -->
+          <div class="mt-4">
+            <label for="id_password" class="block mb-2 text-sm font-medium text-white">Contraseña</label>
+            <div class="relative">
+              <input id="id_password" type="password" name="password" placeholder="Ingresa tu contraseña"
+                     class="w-full px-4 py-3 pr-12 bg-[#2B3A5A] border border-[#3E4E71] rounded-lg
+                            text-white placeholder-[#8e9bb5] focus:outline-none focus:ring-2
+                            focus:ring-[#4285F4]" autocomplete="current-password"/>
+              <!-- Botón ojo -->
+              <button type="button"
+                      class="absolute top-1/2 -translate-y-1/2 right-2 h-10 w-10 grid place-items-center
+                             rounded-md focus:outline-none focus:ring-2 focus:ring-[#4285F4]"
+                      aria-label="Mostrar contraseña" title="Mostrar contraseña"
+                      data-password-toggle data-target="id_password">
+                <img data-icon="eye-closed" src="../static/img/hide.png" alt="Mostrar contraseña"
+                     class="h-5 w-5 invert contrast-200 brightness-200"/>
+                <img data-icon="eye-open" src="../static/img/eye.svg" alt="Ocultar contraseña"
+                     class="h-5 w-5 hidden invert contrast-200 brightness-200"/>
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-2 text-left">
+            <a href="./password_reset_form.html" class="link-underline text-sm text-text-muted hover:text-white">
+              ¿Olvidaste tu contraseña?
+            </a>
+          </div>
+
+          <button id="btn-login" type="button"
+                  class="btn-fs btn-fs--hover-purple w-full mt-6 py-3 font-bold text-white bg-[#4285F4] rounded-lg hover:bg-[#357AE8]">
+            Iniciar Sesión
+          </button>
+
+          <!-- hCaptcha -->
+          <div class="mt-4">
+            <div class="flex justify-center">
+              <div id="login-captcha" class="scale-95 md:scale-100 origin-center hidden"></div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-center mt-6">
+            <hr class="w-full border-gray-600">
+            <span class="px-4 text-xs font-bold text-gray-400">O</span>
+            <hr class="w-full border-gray-600">
+          </div>
+
+          <!-- Google -->
+          <a id="btn-google"
+             class="btn-fs btn-fs--white cursor-pointer w-full mt-6 py-3 flex items-center justify-center
+                    font-semibold text-gray-800 rounded-lg hover:bg-gray-200">
+            <img src="../static/img/google-icon.svg" alt="Google Icon" class="w-6 h-6 mr-3">
+            Iniciar sesión con Google
+          </a>
+        </form>
+      </div>
+
+      <!-- Form: Register -->
+      <div id="register-form" class="hidden space-y-6">
+        <form id="fs-register-form" method="post" action="#">
+          <div class="flex space-x-4">
+            <div class="w-1/2">
+              <label for="register-first-name" class="block mb-2 text-sm font-medium text-white">Nombre(s)</label>
+              <input id="register-first-name" type="text" name="first_name" placeholder="Tu nombre"
+                     class="w-full px-4 py-3 bg-[#2B3A5A] border border-[#3E4E71] rounded-lg
+                            text-white placeholder-[#8e9bb5] focus:outline-none focus:ring-2
+                            focus:ring-[#4285F4] transition-all duration-200">
+            </div>
+            <div class="w-1/2">
+              <label for="register-last-name" class="block mb-2 text-sm font-medium text-white">Apellidos</label>
+              <input id="register-last-name" type="text" name="last_name" placeholder="Tus apellidos"
+                     class="w-full px-4 py-3 bg-[#2B3A5A] border border-[#3E4E71] rounded-lg
+                            text-white placeholder-[#8e9bb5] focus:outline-none focus:ring-2
+                            focus:ring-[#4285F4] transition-all duration-200">
+            </div>
+          </div>
+
+          <div>
+            <label for="register-username" class="block mb-2 mt-4 text-sm font-medium text-white">Nombre de Usuario</label>
+            <input id="register-username" type="text" name="username" placeholder="Elige un @usuario"
+                   class="w-full px-4 py-3 bg-[#2B3A5A] border border-[#3E4E71] rounded-lg
+                          text-white placeholder-[#8e9bb5] focus:outline-none focus:ring-2
+                          focus:ring-[#4285F4] transition-all duration-200">
+          </div>
+
+          <div>
+            <label for="register-email" class="block mb-2 mt-4 text-sm font-medium text-white">Email</label>
+            <input id="register-email" type="email" name="email" placeholder="Ingresa tu correo"
+                   class="w-full px-4 py-3 bg-[#2B3A5A] border border-[#3E4E71] rounded-lg
+                          text-white placeholder-[#8e9bb5] focus:outline-none focus:ring-2
+                          focus:ring-[#4285F4] transition-all duration-200">
+          </div>
+
+          <!-- Password -->
+          <div class="mt-4">
+            <label for="register-password" class="block mb-2 text-sm font-medium text-white">Contraseña</label>
+            <div class="relative">
+              <input id="register-password" type="password" name="password" placeholder="Crea una contraseña"
+                     class="w-full px-4 py-3 pr-12 bg-[#2B3A5A] border border-[#3E4E71] rounded-lg
+                            text-white placeholder-[#8e9bb5] focus:outline-none focus:ring-2
+                            focus:ring-[#4285F4] transition-all duration-200" autocomplete="new-password"/>
+              <button type="button"
+                      class="absolute top-1/2 -translate-y-1/2 right-2 h-10 w-10 grid place-items-center
+                             rounded-md focus:outline-none focus:ring-2 focus:ring-[#4285F4]"
+                      aria-label="Mostrar contraseña" title="Mostrar contraseña"
+                      data-password-toggle data-target="register-password">
+                <img data-icon="eye-closed" src="../static/img/hide.png" alt="Mostrar contraseña"
+                     class="h-5 w-5 invert contrast-200 brightness-200" />
+                <img data-icon="eye-open" src="../static/img/eye.svg" alt="Ocultar contraseña"
+                     class="h-5 w-5 hidden invert contrast-200 brightness-200" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Confirmación -->
+          <div class="mt-4">
+            <label for="register-password2" class="block mb-2 text-sm font-medium text-white">Confirmar Contraseña</label>
+            <div class="relative">
+              <input id="register-password2" type="password" name="password2" placeholder="Confirma tu contraseña"
+                     class="w-full px-4 py-3 pr-12 bg-[#2B3A5A] border border-[#3E4E71] rounded-lg
+                            text-white placeholder-[#8e9bb5] focus:outline-none focus:ring-2
+                            focus:ring-[#4285F4] transition-all duration-200" autocomplete="new-password"/>
+              <button type="button"
+                      class="absolute top-1/2 -translate-y-1/2 right-2 h-10 w-10 grid place-items-center
+                             rounded-md focus:outline-none focus:ring-2 focus:ring-[#4285F4]"
+                      aria-label="Mostrar contraseña" title="Mostrar contraseña"
+                      data-password-toggle data-target="register-password2">
+                <img data-icon="eye-closed" src="../static/img/hide.png" alt="Mostrar contraseña"
+                     class="h-5 w-5 invert contrast-200 brightness-200" />
+                <img data-icon="eye-open" src="../static/img/eye.svg" alt="Ocultar contraseña"
+                     class="h-5 w-5 hidden invert contrast-200 brightness-200" />
+              </button>
+            </div>
+          </div>
+
+          <!-- hCaptcha -->
+          <div class="mt-4">
+            <div class="flex justify-center">
+              <div id="reg-captcha" data-sitekey="" class="scale-95 md:scale-100 origin-center"></div>
+            </div>
+          </div>
+
+          <button id="btn-register" type="button"
+                  class="btn-fs btn-fs--hover-purple w-full mt-6 py-3 font-bold text-white bg-[#4285F4] rounded-lg hover:bg-[#357AE8] transition-all duration-200">
+            Crear Cuenta
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="django-context" data-active-tab="login" class="hidden"></div>
+
+  <!-- Toast stack -->
+  <div id="fs-toast-stack"
+       class="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-3 pointer-events-none">
+  </div>
+
+
+  <script src="/static/js/flash.js?v=2" defer></script>
+  <script src="../static/js/config.js"></script>
+  <script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad&render=explicit" async defer></script>
+  <script src="../static/js/main.js"></script>
+  <script src="../static/js/password.js"></script>
+
+</body>
+</html>
