@@ -3,7 +3,7 @@ from django.shortcuts import render
 import requests
 from django.http import JsonResponse, HttpResponseBadRequest, Http404
 from django.views.decorators.http import require_GET, require_POST
-from .models import Cancion, Emocion, CancionEmocion, Artista, Album
+from .models import Cancion, Emocion, CancionEmocion, Artista, Album, Playlist, PlaylistCancion
 from django.db.models.functions import Random
 from .services_lyrics import get_lyrics
 from django.views.decorators.csrf import csrf_exempt
@@ -11,8 +11,10 @@ import json
 from django.db import transaction, IntegrityError
 import json, traceback
 from django.conf import settings
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.http import HttpResponseRedirect
+from django.db import models
+from django.views.decorators.http import require_http_methods
 
 
 
@@ -57,6 +59,60 @@ def _enrich_album(album, dz_id: str | None):
     if changed:
         album.save(update_fields=["portada_url", "fecha_lanzamiento"])
     return album
+
+# ---------- helpers mínimos para dar de alta canciones desde Deezer ----------
+def _ensure_artist_from_dz(dz_artist):
+    if not dz_artist:
+        return None
+    art, _ = Artista.objects.get_or_create(
+        deezer_id=str(dz_artist.get("id")) if dz_artist.get("id") else None,
+        defaults={
+            "nombre": dz_artist.get("name", "")[:120],
+            "imagen_url": dz_artist.get("picture_medium") or dz_artist.get("picture") or "",
+        }
+    )
+    return _enrich_artist(art, str(dz_artist.get("id"))) if dz_artist.get("id") else art
+
+def _ensure_album_from_dz(dz_album, artista):
+    if not dz_album:
+        return None
+    alb, _ = Album.objects.get_or_create(
+        deezer_id=str(dz_album.get("id")) if dz_album.get("id") else None,
+        defaults={
+            "titulo": dz_album.get("title", "")[:160],
+            "artista": artista,
+            "portada_url": dz_album.get("cover_medium") or dz_album.get("cover") or "",
+        }
+    )
+    return _enrich_album(alb, str(dz_album.get("id"))) if dz_album.get("id") else alb
+
+def _ensure_cancion_from_dz(track_id: int):
+    try:
+        return Cancion.objects.get(deezer_id=str(track_id))
+    except Cancion.DoesNotExist:
+        pass
+
+    # Traer track de Deezer
+    data = _dz_get(f"/track/{track_id}")
+    if not data or not data.get("id"):
+        return None
+
+    dz_artist = data.get("artist") or {}
+    dz_album  = data.get("album") or {}
+
+    artista = _ensure_artist_from_dz(dz_artist)
+    album   = _ensure_album_from_dz(dz_album, artista)
+
+    # Crea Cancion con tus campos
+    cancion = Cancion.objects.create(
+        deezer_id=str(data["id"]),
+        titulo=data.get("title", "")[:200],
+        duracion=int(data.get("duration") or 30),
+        preview_url=data.get("preview") or "",
+        artista=artista,
+        album=album,
+    )
+    return cancion
 
 
 @login_required
@@ -361,4 +417,200 @@ def capture_deezer_track(request):
     })
 
 # --- FIN: LÓGICA DE LAS EMOCIONES ---
+
+
+# --- INICIO: API PLAYLISTS (listar/crear) ---
+
+@login_required
+@require_GET
+def playlists_list(request):
+    # Playlists del usuario
+    qs = (Playlist.objects
+          .filter(usuario=request.user)
+          .order_by("-id")
+          .values("id", "nombre", "descripcion", "es_publica", "fecha_creacion"))
+
+    ids = [p["id"] for p in qs]
+    if not ids:
+        return JsonResponse({"data": []})
+
+    # Conteo de canciones por playlist
+    counts = dict(
+        PlaylistCancion.objects
+        .filter(playlist_id__in=ids)
+        .values_list("playlist_id")
+        .annotate(c=models.Count("id"))
+    )
+
+    # Duración total
+    dur_map = dict(
+        PlaylistCancion.objects
+        .filter(playlist_id__in=ids)
+        .annotate(ms=models.F("cancion__duracion") * 1000)
+        .values("playlist_id")
+        .annotate(total_ms=models.Sum("ms"))
+        .values_list("playlist_id", "total_ms")
+    )
+
+    covers_map = {pid: [] for pid in ids}
+    for pc in (PlaylistCancion.objects
+               .filter(playlist_id__in=ids)
+               .select_related("cancion__album")
+               .order_by("playlist_id", "posicion", "id")):
+        pid = pc.playlist_id
+        if len(covers_map[pid]) >= 4:
+            continue
+        cover = getattr(getattr(pc.cancion, "album", None), "portada_url", "") or ""
+        if cover:
+            covers_map[pid].append(cover)
+
+    data = []
+    for p in qs:
+        pid = p["id"]
+        data.append({
+            "id": pid,
+            "nombre": p["nombre"],
+            "fecha_creacion": p["fecha_creacion"],
+            "track_count": int(counts.get(pid, 0)),
+            "duration_ms": int(dur_map.get(pid) or 0),
+            "covers": covers_map.get(pid, []),
+        })
+    return JsonResponse({"data": data})
+
+
+# -------- Helper: garantizar canción local desde un Deezer ID --------
+def _fetch_deezer_track_json(track_id: int) -> dict:
+    r = requests.get(f"https://api.deezer.com/track/{track_id}", timeout=6)
+    r.raise_for_status()
+    return r.json()
+
+def ensure_cancion_from_deezer_id(deezer_id: int) -> Cancion:
+    c = Cancion.objects.filter(deezer_id=deezer_id).first()
+    if c:
+        return c
+
+    data = _fetch_deezer_track_json(deezer_id)
+    titulo = data.get("title") or ""
+    dur_seg = int(data.get("duration") or 0)
+
+    # TODO: si tu modelo requiere álbum/artista no nulos, crea/relaciónalos aquí.
+    c = Cancion.objects.create(
+        deezer_id=deezer_id,
+        titulo=titulo,
+        duracion=dur_seg,
+    )
+    return c
+
+
+@login_required
+@require_POST
+def create_playlist(request):
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return HttpResponseBadRequest("JSON inválido")
+
+    nombre      = (payload.get("nombre") or "").strip()
+    descripcion = (payload.get("descripcion") or "").strip()
+    es_publica  = bool(payload.get("es_publica", False))
+    tracks      = payload.get("tracks") or []
+
+    # Validaciones
+    if len(nombre) < 3:
+        return JsonResponse({"ok": False, "error": "El nombre debe tener al menos 3 caracteres."}, status=400)
+    if not isinstance(tracks, list) or not tracks:
+        return JsonResponse({"ok": False, "error": "Agrega al menos una canción."}, status=400)
+
+    # Normaliza a ints
+    try:
+        dz_ids = [int(t) for t in tracks]
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "tracks debe ser lista de enteros."}, status=400)
+
+    with transaction.atomic():
+        # Crea la playlist
+        pl = Playlist.objects.create(
+            nombre=nombre,
+            descripcion=descripcion,
+            es_publica=es_publica,
+            usuario=request.user,
+        )
+
+        local_ids = []
+        pos_map   = {}
+        for idx, dz_id in enumerate(dz_ids, start=1):
+            c = ensure_cancion_from_deezer_id(dz_id)
+            local_ids.append(c.id)
+            pos_map[c.id] = idx
+
+        canciones_qs = Cancion.objects.filter(id__in=local_ids)
+        items = [
+            PlaylistCancion(playlist=pl, cancion=c, posicion=pos_map.get(c.id))
+            for c in canciones_qs
+        ]
+        PlaylistCancion.objects.bulk_create(items, ignore_conflicts=True)
+
+        track_count = len(items)
+        duration_ms = (canciones_qs.aggregate(
+            total=models.Sum(models.F("duracion"))
+        )["total"] or 0) * 1000
+
+    return JsonResponse({
+        "ok": True,
+        "playlist": {
+            "id": pl.id,
+            "nombre": pl.nombre,
+            "descripcion": getattr(pl, "descripcion", ""),
+            "es_publica": pl.es_publica,
+            "track_count": track_count,
+            "duration_ms": duration_ms,
+        }
+    }, status=201)
+
+
+@login_required
+@require_http_methods(["GET", "DELETE"])
+def playlist_detail(request, pid: int):
+    pl = get_object_or_404(Playlist, id=pid, usuario=request.user)
+
+    if request.method == "DELETE":
+        PlaylistCancion.objects.filter(playlist=pl).delete()
+        pl.delete()
+        return JsonResponse({
+            "deleted": True,
+            "redirect": "/pages/dashboard.html#/playlists"
+        }, status=200)
+
+    pcs = (PlaylistCancion.objects
+           .filter(playlist=pl)
+           .select_related("cancion__artista", "cancion__album")
+           .order_by("posicion", "id"))
+
+    tracks = []
+    total_ms = 0
+    for pc in pcs:
+        c = pc.cancion
+        dur = int(c.duracion or 30)
+        total_ms += dur * 1000
+        tracks.append({
+            "id": int(c.deezer_id) if (c.deezer_id and str(c.deezer_id).isdigit()) else c.id,
+            "title": c.titulo,
+            "duration": dur,
+            "preview": c.preview_url or "",
+            "artist": c.artista.nombre if c.artista else "",
+            "album":  c.album.titulo if c.album else "",
+            "cover":  c.album.portada_url if c.album else "",
+        })
+
+    return JsonResponse({
+        "id": pl.id,
+        "nombre": pl.nombre,
+        "descripcion": pl.descripcion or "",
+        "track_count": len(tracks),
+        "duration_ms": total_ms,
+        "tracks": tracks,
+    })
+
+# --- FIN: API PLAYLISTS ---
+
 

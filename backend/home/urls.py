@@ -10,5 +10,7 @@ urlpatterns = [
     path("api/songs", views.songs_by_emotion, name="songs_by_emotion"),
     path("api/songs/<int:song_id>/vote", views.vote_song_emotion, name="vote_song_emotion"),
     path("api/capture/deezer-track", views.capture_deezer_track, name="capture_deezer_track"),
-
+    path("api/v1/playlists/", views.playlists_list, name="playlists_list"),
+    path("api/v1/playlists/create", views.create_playlist, name="pl_create"),
+    path("api/v1/playlists/<int:pid>/", views.playlist_detail, name="playlist-detail"),
 ]

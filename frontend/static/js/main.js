@@ -219,6 +219,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     const panel = document.getElementById('fs-songs-scroll');
     if(main) main.style.height = `calc(100dvh - ${hHeader}px - ${hPlayer}px)`;
     if(panel) panel.style.height = `calc(100dvh - ${hHeader}px - ${hPlayer}px - ${extraTop}px)`;
+    document.documentElement.style.setProperty('--fs-player-h', `${hPlayer}px`);
   }
   window.addEventListener('load', setHeights);
   window.addEventListener('resize', setHeights);
@@ -228,8 +229,12 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 (function () {
   const $viewDashboard = document.getElementById('view-dashboard');
   const $viewProfile   = document.getElementById('view-profile');
+  const $viewPL        = document.getElementById('view-playlists');
+  const $viewCreate = document.getElementById('view-pl-create');
   const $navDash       = document.querySelector('a[href="#/dashboard"]');
   const $navPerfil     = document.querySelector('a[href="#/perfil"]');
+  const $navPL      = document.querySelector('a[href="#/playlists"]');
+  const $navCreate  = document.querySelector('a[href="#/playlist/new"]');
 
   const LS_KEY = getStatsKey();
 
@@ -568,17 +573,29 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     navEl.classList.toggle('text-white/80', !isActive);
   }
   function showView(view) {
-    const isProfile = view === 'perfil';
-    if ($viewProfile)  $viewProfile.hidden  = !isProfile;
-    if ($viewDashboard)$viewDashboard.hidden=  isProfile;
-    setActive($navPerfil, isProfile);
-    setActive($navDash, !isProfile);
-    if (isProfile) { ensureProfileBootstrapped(); renderProfile(); }
+      const isProfile   = view === 'perfil';
+      const isDashboard = view === 'dashboard';
+      const isPlaylists = view === 'playlists';
+      const isCreate   = view === 'pl-create';
+
+      if ($viewDashboard) $viewDashboard.hidden = !isDashboard;
+      if ($viewProfile)   $viewProfile.hidden   = !isProfile;
+      if ($viewPL)        $viewPL.hidden        = !isPlaylists;
+      if ($viewCreate)   $viewCreate.hidden   = !isCreate;
+
+      setActive($navDash,   isDashboard);
+      setActive($navPerfil, isProfile);
+      setActive($navPL,     isPlaylists);
+      setActive($navCreate, isCreate);
+
+      if (isProfile) { ensureProfileBootstrapped(); renderProfile(); }
   }
   function routeFromHash() {
-    const h = (location.hash || '').toLowerCase();
-    if (h.startsWith('#/perfil')) return showView('perfil');
-    return showView('dashboard');
+      const h = (location.hash || '').toLowerCase();
+      if (h.startsWith('#/perfil'))     return showView('perfil');
+      if (h.startsWith('#/playlists'))  return showView('playlists');
+      if (h.startsWith('#/playlist/new')) return showView('pl-create');
+      return showView('dashboard');
   }
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();

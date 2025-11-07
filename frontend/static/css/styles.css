@@ -351,3 +351,82 @@ html, body{
 @keyframes fs-replay-shine{
   to { background-position: 200% 0; }
 }
+
+
+/* ===== Scrollbar playlists (contenedor principal) ===== */
+#pl-scroll{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.25) transparent;
+  padding-bottom: 12px;
+}
+#pl-scroll::-webkit-scrollbar{ width: .5rem; }
+#pl-scroll::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.25);
+  border-radius: .5rem;
+}
+#pl-scroll::-webkit-scrollbar-track{ background: transparent; }
+
+/* ===== Scrollbar lista dentro del modal ===== */
+.fs-modal-scroll{
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.25) transparent;
+}
+.fs-modal-scroll::-webkit-scrollbar{ width: .5rem; }
+.fs-modal-scroll::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.25);
+  border-radius: .5rem;
+}
+.fs-modal-scroll::-webkit-scrollbar-track{ background: transparent; }
+
+/* ===== Modal (overlay centrado + tarjeta azul oscuro) ===== */
+.fs-modal-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(8,12,22,.55);         /* oscurece el fondo */
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 70;
+}
+.fs-modal-card{
+  width: min(720px, calc(100vw - 2rem));
+  background: linear-gradient(180deg, rgba(25,54,104,.88), rgba(14,30,60,.92));
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 1rem;
+  padding: 1rem;
+  color: #fff;
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+}
+.fs-modal-close{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem;
+  border-radius: .5rem;
+  background: rgba(255,255,255,.08);
+  color: #fff; border: 1px solid rgba(255,255,255,.12);
+}
+.fs-modal-close:hover{ background: rgba(255,255,255,.16); }
+
+/* Filas de canciones del modal (mantén tu estructura actual si ya la tienes) */
+.plm-row{
+  display: grid;
+  grid-template-columns: 2rem 3rem 1fr auto;
+  gap: .75rem;
+  align-items: center;
+  padding: .5rem .5rem;
+  border-radius: .75rem;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  margin-bottom: .5rem;
+  cursor: pointer;
+}
+.plm-row:hover{ background: rgba(255,255,255,.08); }
+.plm-cover{ width: 3rem; height: 3rem; border-radius: .5rem; object-fit: cover; background: rgba(255,255,255,.1); }
+.plm-title{ color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.plm-artist{ color: rgba(255,255,255,.75); font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.plm-time{ color: rgba(255,255,255,.75); font-variant-numeric: tabular-nums; }
+
+/* Fuerza de tope para el modal */
+#pl-modal { position: fixed; inset: 0; z-index: 2147483647; }
+

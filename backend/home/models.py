@@ -44,7 +44,7 @@ class Cancion(models.Model):
 
 class Playlist(models.Model):
     nombre = models.CharField(max_length=80)
-    portada_url = models.URLField(max_length=255, null=True, blank=True)
+    descripcion = models.TextField(null=True, blank=True)
     fecha_creacion = models.DateField(auto_now_add=True)
     es_publica = models.BooleanField(default=False)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="playlists")

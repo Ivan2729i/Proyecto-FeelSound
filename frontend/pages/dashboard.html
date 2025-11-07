@@ -258,29 +258,229 @@
         </div>
       </section>
 
+
       <!-- === VIEW: Mis Playlists === -->
       <section id="view-playlists" class="space-y-6" hidden>
         <div class="flex items-center justify-between">
           <div>
             <h1 class="text-3xl font-bold">Mis Listas de Reproducción</h1>
-            <p class="text-white/60 text-sm">Tus playlists personales</p>
+            <p class="text-white/60 text-sm">Organiza, comparte y colabora</p>
           </div>
-          <a href="#/playlist/new" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl btn-fs btn-fs--hover-purple">
+          <a href="#/playlist/new" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-fs btn-fs--hover-purple">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 11V6h2v5h5v2h-5v5h-2v-5H6v-2z"/></svg>
             Nueva playlist
           </a>
         </div>
 
-        <div id="pl-list" class="space-y-6"></div>
+        <!-- Contenedor traslúcido -->
+        <div class="rounded-2xl bg-white/5 backdrop-blur border border-white/10 p-5">
+          <!-- Vacío (lo alterna el JS) -->
+          <div id="pl-empty" role="status" aria-live="polite"
+               class="rounded-xl border border-white/10 bg-white/5 p-10 text-center hidden">
+            <h3 class="text-white/90 font-semibold">Aún no tienes playlists</h3>
+            <p class="text-white/60 mt-1">Crea tu primera lista para empezar a organizar tu música.</p>
+            <a href="#/playlist/new" class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-fs btn-fs--hover-purple">
+              Crear playlist
+            </a>
+          </div>
 
-        <div id="pl-empty" class="hidden rounded-2xl bg-white/5 backdrop-blur border border-white/10 p-10 text-center">
-          <h3 class="text-white/90 font-semibold">Aún no tienes playlists</h3>
-          <p class="text-white/60 mt-1">Crea tu primera lista para empezar a organizar tu música.</p>
-          <a href="#/playlist/new" class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-fs btn-fs--hover-purple">
-            Crear playlist
-          </a>
+          <!-- Scroll interno (dentro del recuadro traslúcido) -->
+          <div id="pl-scroll" class="max-h-[60vh] md:max-h-[64vh] overflow-y-auto overscroll-contain pr-2">
+            <!-- Grid (lo rellena el JS) -->
+            <div id="pl-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 min-h-64"></div>
+          </div>
         </div>
       </section>
+
+      <!-- Tarjeta (sin header de imagen) -->
+      <template id="tpl-pl-card">
+        <article class="group rounded-2xl bg-white/5 backdrop-blur border border-white/10 hover:border-white/20 transition overflow-hidden">
+          <div class="p-4">
+            <div class="flex items-start justify-between gap-4">
+              <!-- Título + meta (sin solapes) -->
+              <div class="min-w-0">
+                <a class="pl-name text-lg font-semibold text-white hover:underline block truncate"></a>
+                <p class="pl-meta text-white/40 text-xs mt-1"></p>
+              </div>
+
+              <!-- Acciones -->
+              <div class="shrink-0 flex items-center gap-2">
+                <!-- Compartir (placeholder) -->
+                <button class="pl-share p-2 rounded-lg hover:bg-white/10" title="Compartir">
+                  <svg class="w-5 h-5 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>
+                    <path d="M8.59 13.51l6.83 3.98M15.41 6.51L8.59 10.5"></path>
+                  </svg>
+                </button>
+                <!-- Eliminar (bote) -->
+                <button class="pl-del p-2 rounded-lg hover:bg-red-600/20" title="Eliminar">
+                  <svg class="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                    <path d="M10 11v6M14 11v6"></path>
+                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Footer: contador y duración -->
+            <div class="mt-4 flex items-center justify-between text-xs text-white/60">
+              <span class="pl-count">0 canciones</span>
+              <span class="pl-duration tabular-nums">0:00</span>
+            </div>
+          </div>
+        </article>
+      </template>
+
+
+      <!-- ===== Modal Detalle Playlist ===== -->
+      <div id="pl-modal"
+           class="fixed inset-0 z-50 hidden grid place-items-center">
+        <!-- overlay -->
+        <button id="plm-close-bg" class="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-label="Cerrar"></button>
+
+        <!-- panel centrado -->
+        <div class="w-[min(900px,92vw)] max-h-[82vh]
+                    rounded-2xl border border-white/10 bg-[#0b1630] text-white
+                    shadow-2xl overflow-hidden">
+          <!-- header -->
+          <div class="px-6 pt-5 pb-3 border-b border-white/10">
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <h3 id="plm-title" class="text-2xl font-semibold truncate">Playlist</h3>
+                <p id="plm-desc" class="text-white/70 text-sm mt-1 line-clamp-2">Descripción</p>
+              </div>
+              <button id="plm-close"
+                      class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-white/10"
+                      title="Cerrar" aria-label="Cerrar">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- body con scroll interno -->
+          <div class="px-2 pb-4">
+            <div id="plm-scroll" class="fs-modal-scroll pr-2">
+              <div id="plm-list" class="divide-y divide-white/10"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fila de canción del modal -->
+      <template id="tpl-plm-row">
+        <div class="flex items-center gap-4 px-4 py-3 hover:bg-white/5 cursor-pointer">
+          <div class="w-6 text-white/60 text-sm tabular-nums">1</div>
+          <img class="plm-cover w-12 h-12 rounded-lg object-cover bg-white/10" src="" alt="">
+          <div class="min-w-0">
+            <div class="plm-title text-white truncate max-w-[320px]">Título</div>
+            <div class="plm-artist text-white/60 text-sm truncate max-w-[420px]">Artista</div>
+          </div>
+          <div class="ml-auto plm-time text-white/60 text-sm">0:30</div>
+        </div>
+      </template>
+
+
+      <!-- ===== Modal Confirmar Borrado de Playlist ===== -->
+      <div id="pl-del-modal" class="fixed inset-0 z-[2147483647] hidden">
+      <!-- Fondo -->
+      <button id="pldel-close-bg"
+              class="absolute inset-0 bg-black/60 backdrop-blur-sm"></button>
+
+      <!-- Panel -->
+      <div data-modal-panel
+           class="relative mx-auto w-[min(540px,92vw)] rounded-2xl bg-[#0b1630] text-white
+                  shadow-2xl ring-1 ring-white/10
+                  grid gap-0 overflow-hidden
+                  animate-[plIn_.22s_ease-out]">
+        <!-- Header -->
+        <div class="px-6 pt-5 pb-4 border-b border-white/10 flex items-start justify-between">
+          <h3 class="text-xl font-extrabold tracking-tight">Eliminar playlist</h3>
+        </div>
+
+        <!-- Texto -->
+        <div id="pldel-text" class="px-6 py-4 text-white/80">
+          ¿Seguro que quieres borrar <b>…</b>? Esta acción no se puede deshacer.
+        </div>
+
+        <!-- Acciones -->
+        <div class="px-6 pb-5 pt-3 flex items-center justify-end gap-3">
+          <button id="pldel-cancel"
+                  class="inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold
+                         text-white/90 bg-white/10 hover:bg-white/15 border border-white/10
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25 transition">
+            Cancelar
+          </button>
+
+          <!-- Botón primario “azul-morado” -->
+          <button id="pldel-confirm"
+                  class="inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold
+                          btn-fs btn-fs--hover-purple">
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+      <!-- === VIEW: Crear Playlist === -->
+     <section id="view-pl-create" class="flex flex-col h-full" hidden>
+
+        <div class="mb-6">
+          <h1 class="text-3xl font-bold">Crear nueva playlist</h1>
+        </div>
+
+        <div class="rounded-2xl bg-white/5 backdrop-blur border border-white/10 p-5 mb-6 mt-2">
+          <div class="grid gap-5">
+            <div>
+              <label class="block text-white/80 text-sm mb-2">Nombre de la playlist</label>
+              <input id="plnew-name" type="text" maxlength="120"
+                     placeholder="Ingresa nombre de la playlist"
+                     class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-white placeholder:text-white/40 focus:border-white/20 focus:ring-0">
+              <p id="plnew-name-err" class="hidden text-xs text-red-400 mt-1"></p>
+            </div>
+            <div>
+              <label class="block text-white/80 text-sm mb-2">Descripción</label>
+              <textarea id="plnew-desc" rows="3" maxlength="240"
+                        placeholder="Describe tu lista de reproducción…"
+                        class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-white placeholder:text-white/40 focus:border-white/20 focus:ring-0"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white/5 backdrop-blur border border-white/10 p-5 flex-1 flex flex-col min-h-0 mb-4 mt-4">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <h2 class="text-white/90 font-semibold">Agregar canciones</h2>
+            <div class="relative w-full max-w-sm">
+              <input id="plnew-search" type="text" placeholder="Buscar canciones, artistas, álbum…"
+                     class="w-full h-10 bg-white/5 border border-white/10 rounded-xl pl-10 pr-3 outline-none text-sm placeholder:text-white/40 focus:border-white/20 focus:ring-0 text-white" />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-white/70 pointer-events-none">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </div>
+          </div>
+
+          <div id="plnew-results-scroll" class="flex-1 overflow-y-auto min-h-0 pr-2 -mr-2">
+            <div id="plnew-results" class="space-y-2 pb-4"></div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-4 mt-auto pt-8 mb-6">
+          <a id="plnew-cancel" href="#/playlists" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-white/15 text-white/90 hover:bg-white/10">Cancelar</a>
+          <button id="plnew-save" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-fs btn-fs--hover-purple disabled:opacity-60 disabled:pointer-events-none">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+            Guardar playlist
+          </button>
+        </div>
+      </section>
+
 
       <!-- PLAYER BAR -->
       <footer id="fs-playerbar" class="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-black/40 backdrop-blur">
@@ -437,7 +637,8 @@
   <script src="../static/js/config.js"></script>
   <script src="../static/js/main.js"></script>
   <script src="../static/js/dz.js"></script>
-  <script src="../static/js/playlists.js"></script>
+  <script src="../static/js/playlist.js"></script>
+  <script src="../static/js/playlist_new.js"></script>
 
 
 </body>
