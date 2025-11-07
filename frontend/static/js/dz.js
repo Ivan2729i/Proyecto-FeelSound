@@ -45,6 +45,17 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentList = [];
   let currentIndex = -1;
 
+  // Mantener sincronizados los globals
+  function setList(arr) {
+      currentList = Array.isArray(arr) ? arr : [];
+      window.currentList = currentList;
+  }
+  function setIndex(i) {
+      currentIndex = Number.isInteger(i) ? i : -1;
+      window.currentIndex = currentIndex;
+  }
+
+
   // === Repeat One ===
   let repeatOne = JSON.parse(localStorage.getItem('fs-repeat-one') || 'false');
   function applyRepeatOne(isOn) {
@@ -258,6 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       currentList = items;
       currentIndex = -1;
+      window.currentList = currentList;
+      window.currentIndex = currentIndex;
 
       if (!items.length) {
         tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Sin resultados.</td></tr>`;
@@ -486,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const t = currentList[idx];
 
       if (t.preview && !dzUrlExpired(t.preview)) {
-        currentIndex = idx;
+        setIndex(idx);
         if (!loadTrack(t)) { setPlayUI(false); return; }
 
         try {
@@ -521,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (myTxn !== playTxnId) return;
       if (!healed) { setPlayUI(false); return; }
 
-      currentIndex = idx;
+      setIndex(idx);
       if (!loadTrack(currentList[idx])) { setPlayUI(false); return; }
       const p = audio.play();
       if (p && typeof p.then === 'function') await p;
@@ -538,6 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
       playBusy = false;
     }
   }
+  window.playIndex = playIndex;
 
   // --- Prefetch siguiente ---
   let _nextAudio;
@@ -682,6 +696,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       currentList = items;
       currentIndex = -1;
+      window.currentList = currentList;
+      window.currentIndex = currentIndex;
+
 
       if (!items.length) {
         tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Aún no hay canciones para <b>${emocionClave}</b>. Reproduce desde la búsqueda para sembrarlas ✨</td></tr>`;
@@ -716,6 +733,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         currentList = [t];
         currentIndex = -1;
+        window.currentList = currentList;
+        window.currentIndex = currentIndex;
+
 
         await healPreviewFor(0);
 
@@ -764,4 +784,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // const initialQ = localStorage.getItem(LAST_Q_KEY) || 'bad bunny';
   // doSearch(initialQ);
   // if (inpSearch) inpSearch.value = initialQ;
+
+
+
+    // === API pública para reproducir una lista (usada por el modal) ===
+    window.fsPlayTracks = async function fsPlayTracks(list, startIndex = 0) {
+      try {
+        if (!Array.isArray(list) || !list.length) return;
+
+        // Normaliza al formato del player
+        const items = list.map(x => ({
+          id: x.id,
+          title: x.title || x.titulo || '',
+          duration: Number(x.duration || x.duracion || 30) || 30,
+          preview: (x.preview || x.preview_url || ''),
+          artist: x.artist || x.artista || '',
+          contributors: Array.isArray(x.contributors) ? x.contributors : [],
+          album: x.album || '',
+          cover: x.cover || ''
+        }));
+
+        setList(items);
+        setIndex(-1);
+
+        // cura preview si falta y reproduce
+        const first = Math.max(0, Math.min(startIndex, items.length - 1));
+        await playIndex(first, true);
+      } catch (e) {
+        console.warn('[fsPlayTracks] fallo:', e);
+      }
+    };
+
+
 });
