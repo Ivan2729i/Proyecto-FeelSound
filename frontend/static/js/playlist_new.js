@@ -21,12 +21,63 @@
   const selected = new Map();
   let lastQuery  = '';
   let lastRows   = [];
+  let seedFromEditingOnce = false;
+
+  // --- reset duro de la vista crear (para cuando NO es edición) ---
+  function resetCreateViewHard() {
+      // inputs
+      if ($name)  $name.value = '';
+      if ($desc)  $desc.value = '';
+      if ($search) $search.value = '';
+
+      // estado de búsqueda/selección
+      selected.clear();
+      seedFromEditingOnce = false;
+      lastQuery = '';
+      lastRows = [];
+
+      // UI
+      if ($results) $results.innerHTML = '';
+      syncIcons();
+      updateSaveBtn();
+
+      // quita cualquier “modo edición” que haya quedado pegado
+      const $v = document.getElementById('view-pl-create');
+      if ($v) { delete $v.dataset.mode; delete $v.dataset.pid; }
+      if (window.FEEL) {
+        delete window.FEEL.editingPlaylistId;
+        delete window.FEEL.editingPlaylistName;
+        delete window.FEEL.editingPlaylistDesc;
+        delete window.FEEL.editingPlaylistTrackIds;
+      }
+  }
+
+  function seedSelectedFromEditingIfNeeded() {
+      if (seedFromEditingOnce) return;
+      const ids = window.FEEL?.editingPlaylistTrackIds;
+      if (Array.isArray(ids) && ids.length) {
+        ids.forEach(id => selected.set(String(id), { id:Number(id) }));
+        seedFromEditingOnce = true;
+        syncIcons();
+        updateSaveBtn();
+      }
+  }
 
   // ------- Helpers -------
   const API_ORIGIN =
     (window.API && window.API.origin) ||
     (window.FEEL?.env?.API_BASE?.replace(/\/api(?:\/v1)?\/?$/,'')) ||
     "http://127.0.0.1:8000";
+
+  // --- helper: detectar modo edición e ID ---
+  function isEditMode() {
+      const pidFromFEEL = window.FEEL?.editingPlaylistId;
+      const pidFromDOM  = document.getElementById('view-pl-create')?.dataset?.pid;
+      return Boolean(pidFromFEEL || pidFromDOM);
+  }
+  function getEditingId() {
+      return Number(window.FEEL?.editingPlaylistId || document.getElementById('view-pl-create')?.dataset?.pid || 0);
+  }
 
   function getCookie(name) {
     try {
@@ -49,13 +100,20 @@
   }
 
   function updateSaveBtn(){
-      const ok = ($name.value.trim().length >= 3) && selected.size >= 1;
+      const nameOK = ($name?.value.trim().length || 0) >= 3;
+      const needTracks = !isEditMode(); // en edición NO obligamos a seleccionar
+      const tracksOK = needTracks ? selected.size >= 1 : true;
+
+      const ok = nameOK && tracksOK;
       if ($save){
         $save.classList.toggle('opacity-60', !ok);
-        $save.classList.toggle('pointer-events-none', false);
         $save.setAttribute('aria-disabled', ok ? 'false' : 'true');
+        $save.disabled = !ok;
+        // texto del botón según modo
+        $save.textContent = isEditMode() ? 'Guardar cambios' : 'Guardar playlist';
       }
   }
+
 
   function toggleSelect(track){
     const key = String(track.id);
@@ -144,10 +202,14 @@
     const rows = Array.isArray(data?.data) ? data.data : [];
     return rows.map(d => ({
       id: d.id,
-      title: d.title,
-      artists: [d.artist?.name].filter(Boolean),
-      duration_ms: (d.duration||0)*1000,
-      cover_url: d.album?.cover || d.album?.cover_medium || ''
+      title: d.title || '',
+      artist: d.artist?.name || '',
+      artists: d.artist?.name ? [d.artist.name] : [],
+      album: d.album?.title || '',
+      duration_ms: (d.duration || 0) * 1000,
+      cover_url: d.album?.cover || d.album?.cover_medium || '',
+      cover: d.album?.cover || d.album?.cover_medium || '',
+      preview: d.preview || ''
     }));
   }
 
@@ -174,54 +236,175 @@
 
   // ------- Validación + Guardado -------
   function validateLocal(){
-    const errors = [];
-    const name = ($name?.value || '').trim();
-    if (name.length < 3) errors.push('El nombre debe tener al menos 3 caracteres.');
-    if (selected.size < 1) errors.push('Agrega al menos una canción.');
-    return errors;
+      const errors = [];
+      const name = ($name?.value || '').trim();
+      if (name.length < 3) errors.push('El nombre debe tener al menos 3 caracteres.');
+      if (!isEditMode() && selected.size < 1) {
+        errors.push('Agrega al menos una canción.');
+      }
+      return errors;
   }
 
-  async function savePlaylist(){
-    // Validación local
-    const errs = validateLocal();
-    if (errs.length){
-      if ($name && $name.value.trim().length < 3){
-        if ($nameErr){ $nameErr.textContent = 'El nombre debe tener al menos 3 caracteres.'; $nameErr.classList.remove('hidden'); }
-      } else if ($nameErr){ $nameErr.classList.add('hidden'); }
-      flash('error', errs.join(' '));
-      updateSaveBtn();
-      return;
+    // --- helper: DELETE local ---
+    async function apiDeletePlaylistLocal(pid){
+      const base = API_ORIGIN.replace(/\/+$/,'');
+      const url  = `${base}/api/v1/playlists/${pid}/`;
+      const r = await fetch(url, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken'),
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      if (r.status === 204) return { ok:true };
+      if (!r.ok) {
+        let msg = `Error ${r.status}`;
+        try { const j = await r.json(); if (j?.detail) msg = j.detail; } catch {}
+        throw new Error(msg);
+      }
+      return { ok:true };
     }
-    if ($nameErr) $nameErr.classList.add('hidden');
 
-    // Payload
-    const payload = {
-      nombre: ($name?.value || '').trim(),
-      descripcion: ($desc?.value || '').trim(),
-      es_publica: false,
-      tracks: Array.from(selected.keys()).map(x => Number(x))
-    };
-
-    // UI estado
-    const oldText = $save?.textContent;
-    if ($save){ $save.textContent = 'Guardando…'; $save.disabled = true; }
-
-    try {
-      const out = await createPlaylist(payload);
-      if (!out?.ok) throw new Error(out?.error || 'Error al crear la playlist.');
-
-      clearForm();
-      flash('success', 'Playlist creada.');
-      location.hash = '#/playlists';
-
-    } catch (e) {
-      // Errores: NO limpiar nada
-      flash('error', e.message || 'No se pudo crear la playlist.');
-    } finally {
-      if ($save){ $save.textContent = oldText || 'Guardar playlist'; $save.disabled = false; }
-      updateSaveBtn();
+    // ---- construye arreglo de metadatos completos ----
+    function buildTracksFullFromSelected(selMap){
+      return Array.from(selMap.values()).map(t => ({
+        id: Number(t.id),
+        title: t.title || '',
+        artist: t.artist || (Array.isArray(t.artists) ? t.artists[0] : ''),
+        artists: Array.isArray(t.artists) ? t.artists : (t.artist ? [t.artist] : []),
+        album: t.album || '',
+        cover: t.cover || t.cover_url || '',
+        duration: Math.round((t.duration_ms || 0) / 1000), // segundos
+        preview: t.preview || ''
+      }));
     }
-  }
+
+    async function savePlaylist(){
+      // Validación local
+      const name = ($name?.value || '').trim();
+      const errs = [];
+      if (name.length < 3) errs.push('El nombre debe tener al menos 3 caracteres.');
+      if (!isEditMode() && selected.size < 1) errs.push('Agrega al menos una canción.');
+
+      if (errs.length){
+        if ($name && name.length < 3 && $nameErr){
+          $nameErr.textContent = 'El nombre debe tener al menos 3 caracteres.';
+          $nameErr.classList.remove('hidden');
+        } else if ($nameErr){ $nameErr.classList.add('hidden'); }
+        flash('error', errs.join(' '));
+        updateSaveBtn?.();
+        return;
+      }
+      if ($nameErr) $nameErr.classList.add('hidden');
+
+      const oldText = $save?.textContent;
+      if ($save){ $save.textContent = 'Guardando…'; $save.disabled = true; }
+
+      try {
+        if (isEditMode()){
+          const pid = getEditingId();
+
+          // 1) UNIÓN de tracks: lo existente + lo seleccionado ahora (sin duplicados)
+          const existing = Array.isArray(window.FEEL?.editingPlaylistTrackIds)
+            ? window.FEEL.editingPlaylistTrackIds : [];
+          const addedNow = Array.from(selected.keys()).map(id => Number(id));
+          const unionIds = Array.from(new Set([...existing, ...addedNow]));
+
+          // 2) Payload definitivo con el MISMO nombre (evita cambiar constraint único)
+          const tracksFullNew = buildTracksFullFromSelected(selected);
+          const payload = {
+              nombre: name,
+              descripcion: ($desc?.value || '').trim(),
+              es_publica: false,
+              tracks: unionIds,          // retro-compat con tu API actual
+              tracks_full: tracksFullNew // NUEVO: metadatos de los que el usuario acaba de agregar
+          };
+
+          // 3) Delete → Create (en ese orden) para evitar 1062 y endpoints 405/404
+          await apiDeletePlaylistLocal(pid);
+
+          const urlC = `${API_ORIGIN.replace(/\/+$/,'')}/api/v1/playlists/create`;
+          const rC = await fetch(urlC, {
+            method:'POST', credentials:'include',
+            headers: {
+              'Content-Type':'application/json',
+              'Accept':'application/json',
+              'X-CSRFToken': getCookie('csrftoken'),
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(payload)
+          });
+          const jC = await rC.json().catch(()=>null);
+          if (!rC.ok || jC?.ok === false) {
+            const msg = (jC && (jC.error || jC.detail)) || `No se pudo recrear la playlist.`;
+            throw new Error(msg);
+          }
+
+          // 4) Limpia estado de edición para poder editar otra vez sin arrastrar cosas
+          if (window.FEEL) {
+            delete window.FEEL.editingPlaylistId;
+            delete window.FEEL.editingPlaylistName;
+            delete window.FEEL.editingPlaylistDesc;
+            delete window.FEEL.editingPlaylistTrackIds;
+          }
+          const $viewCreate = document.getElementById('view-pl-create');
+          if ($viewCreate){ delete $viewCreate.dataset.mode; delete $viewCreate.dataset.pid; }
+          seedFromEditingOnce = false;
+          selected.clear(); // que no se acumulen en la siguiente edición
+
+          flash('success', 'Playlist actualizada exitosamente.');
+          location.hash = '#/playlists';
+          return;
+        }
+
+        // ----- Modo CREACIÓN normal -----
+        const ids = Array.from(selected.keys()).map(x => Number(x));
+        const payload = {
+          nombre: name,
+          descripcion: ($desc?.value || '').trim(),
+          es_publica: false,
+          tracks: ids,
+          tracks_full: buildTracksFullFromSelected(selected)
+        };
+
+        const url = `${API_ORIGIN.replace(/\/+$/,'')}/api/v1/playlists/create`;
+        const r = await fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type':'application/json',
+            'Accept':'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await r.json().catch(()=>null);
+        if (!r.ok || data?.ok === false){
+          const msg = (data && (data.error || data.detail)) || 'Error al crear la playlist.';
+          throw new Error(msg);
+        }
+
+        // limpiar y volver
+        if ($name) $name.value = '';
+        if ($desc) $desc.value = '';
+        selected.clear();
+        syncIcons?.();
+        updateSaveBtn?.();
+        flash('success', 'Playlist creada.');
+        location.hash = '#/playlists';
+
+      } catch (e) {
+        flash('error', e.message || 'No se pudo guardar la playlist.');
+      } finally {
+        if ($save){
+          $save.textContent = oldText || (isEditMode() ? 'Guardar cambios' : 'Guardar playlist');
+          $save.disabled = false;
+        }
+      }
+    }
 
   function clearForm(){
     // Limpia todo para éxito o cancelar
@@ -283,17 +466,27 @@
   window.addEventListener('resize', setHeightsSafe);
   window.addEventListener('load', setHeightsSafe);
   setTimeout(setHeightsSafe, 100);
+  document.addEventListener('feelsound:reset-create-form', resetCreateViewHard);
+  document.addEventListener('feelsound:seed-editing-tracks', seedSelectedFromEditingIfNeeded);
 
   // Mostrar/ocultar vista por hash
   function route(){
-    const h = (location.hash || '').toLowerCase();
-    const show = h.startsWith('#/playlist/new');
-    if (section) section.hidden = !show;
-    if (!section.hidden) {
-      setHeightsSafe();
-      if ($results && !$results.innerHTML) renderResults([]);
-      updateSaveBtn();
-    }
+      const h = (location.hash || '').toLowerCase();
+      const show = h.startsWith('#/playlist/new');
+      if (section) section.hidden = !show;
+
+      if (!section.hidden) {
+        // Si NO venimos en modo edición => reset duro para que no se “arrastre” nada
+        const isEdit = !!(document.getElementById('view-pl-create')?.dataset.pid || window.FEEL?.editingPlaylistId);
+        if (!isEdit) resetCreateViewHard();
+        // si es edición, sembrar una sola vez
+        seedSelectedFromEditingIfNeeded();
+
+        // pintar altura/básicos
+        try { enforceThreeVisible(); } catch {}
+        if ($results && !$results.innerHTML) renderResults([]);
+        updateSaveBtn();
+      }
   }
   window.addEventListener('hashchange', route);
   route();

@@ -611,6 +611,30 @@ def playlist_detail(request, pid: int):
         "tracks": tracks,
     })
 
+@login_required
+@require_http_methods(["PATCH","PUT"])
+def playlist_update(request, pid:int):
+    pl = get_object_or_404(Playlist, id=pid, usuario=request.user)
+    try:
+        data = json.loads(request.body or '{}')
+    except Exception:
+        data = {}
+
+    nombre = (data.get('nombre') or '').strip()
+    descripcion = (data.get('descripcion') or '').strip()
+
+    if nombre:
+        pl.nombre = nombre
+    pl.descripcion = descripcion
+    pl.save(update_fields=['nombre','descripcion'])
+
+    return JsonResponse({
+        "id": pl.id,
+        "nombre": pl.nombre,
+        "descripcion": pl.descripcion or "",
+        "updated": True
+    })
+
 # --- FIN: API PLAYLISTS ---
 
 
