@@ -122,11 +122,15 @@
         </div>
 
         <div class="pt-1">
-          <div class="px-3 text-xs uppercase tracking-wider text-white/50 mb-2">Listas de reproducción</div>
-          <div class="space-y-1">
-            <a href="#/playlists/1" class="block px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">Prueba 1</a>
-            <a href="#/playlists/2" class="block px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">Focus Beats</a>
-            <a href="#/playlists/3" class="block px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10">Workout Hits</a>
+          <div class="px-3 text-xs uppercase tracking-wider text-white/50 mb-2">
+            Listas de reproducción
+          </div>
+          <!-- Contenedor dinámico de favoritos -->
+          <div id="fav-pl" class="space-y-1">
+            <div id="fav-pl-empty" class="px-3 py-2 rounded-lg text-white/50 bg-white/5">
+              Agrega una playlist a favoritos para verla aquí.
+            </div>
+            <div id="fav-pl-list" class="space-y-1"></div>
           </div>
         </div>
       </nav>
@@ -165,6 +169,7 @@
                   <th class="px-4 py-3 text-left font-medium">Título</th>
                   <th class="px-4 py-3 text-left font-medium">Álbum</th>
                   <th class="px-4 py-3 text-left font-medium">Duración</th>
+                  <th class="px-2 py-3 text-left font-medium w-10"></th>
                 </tr>
               </thead>
               <tbody id="fs-results-body" class="divide-y divide-white/5 cursor-pointer"></tbody>
@@ -302,14 +307,15 @@
               <!-- Acciones -->
               <div class="shrink-0 flex items-center gap-2">
                 <!-- Favorito -->
-                <button class="pl-fav p-2 rounded-lg hover:bg-pink-600/15 transition" title="Playlist Favoritas">
-                  <svg class="w-5 h-5 text-pink-400 opacity-80" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <button type="button" class="pl-fav p-2 rounded-lg hover:bg-pink-600/15 transition cursor-pointer"
+                        title="Playlist Favorita" aria-pressed="false">
+                  <svg class="w-5 h-5 text-pink-400 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/>
                   </svg>
                 </button>
                 <!-- Editar -->
-                <button class="pl-edit p-2 rounded-lg hover:bg-white/10 transition" title="Editar playlist">
+                <button class="pl-edit p-2 rounded-lg hover:bg-white/10 transition cursor-pointer" title="Editar playlist">
                   <svg class="w-5 h-5 text-white/85" viewBox="0 0 24 24" fill="none"
                        stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 20h9"/>
@@ -317,7 +323,7 @@
                   </svg>
                 </button>
                 <!-- Compartir -->
-                <button class="pl-share p-2 rounded-lg hover:bg-white/10" title="Compartir">
+                <button class="pl-share p-2 rounded-lg hover:bg-white/10 cursor-pointer" title="Compartir">
                   <svg class="w-5 h-5 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle>
@@ -326,7 +332,7 @@
                   </svg>
                 </button>
                 <!-- Eliminar -->
-                <button class="pl-del p-2 rounded-lg hover:bg-red-600/20" title="Eliminar">
+                <button class="pl-del p-2 rounded-lg hover:bg-red-600/20 cursor-pointer" title="Eliminar">
                   <svg class="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M3 6h18"></path>
@@ -336,10 +342,7 @@
                   </svg>
                 </button>
               </div>
-
-
             </div>
-
             <!-- Footer: contador y duración -->
             <div class="mt-4 flex items-center justify-between text-xs text-white/60">
               <span class="pl-count">0 canciones</span>
@@ -377,7 +380,6 @@
               </button>
             </div>
           </div>
-
           <!-- body con scroll interno -->
           <div class="px-2 pb-4">
             <div id="plm-scroll" class="fs-modal-scroll pr-2">
@@ -386,7 +388,6 @@
           </div>
         </div>
       </div>
-
       <!-- Fila de canción del modal -->
       <template id="tpl-plm-row">
         <div class="flex items-center gap-4 px-4 py-3 hover:bg-white/5 cursor-pointer">
@@ -396,7 +397,20 @@
             <div class="plm-title text-white truncate max-w-[320px]">Título</div>
             <div class="plm-artist text-white/60 text-sm truncate max-w-[420px]">Artista</div>
           </div>
-          <div class="ml-auto plm-time text-white/60 text-sm">0:30</div>
+          <div class="ml-auto flex items-center gap-2">
+            <div class="plm-time text-white/60 text-sm tabular-nums w-12 text-right">0:30</div>
+            <button class="plm-more p-2 rounded-lg hover:bg-white/10"
+                    title="Opciones"
+                    data-track-id=""
+                    data-track-title=""
+                    data-track-artists="">
+              <svg class="w-5 h-5 text-white/80" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="2"></circle>
+                <circle cx="12" cy="12" r="2"></circle>
+                <circle cx="19" cy="12" r="2"></circle>
+              </svg>
+            </button>
+          </div>
         </div>
       </template>
 
@@ -404,43 +418,76 @@
       <!-- ===== Modal Confirmar Borrado de Playlist ===== -->
       <div id="pl-del-modal" class="fixed inset-0 z-[2147483647] hidden">
       <!-- Fondo -->
-      <button id="pldel-close-bg"
+        <button id="pldel-close-bg"
               class="absolute inset-0 bg-black/60 backdrop-blur-sm"></button>
 
-      <!-- Panel -->
-      <div data-modal-panel
-           class="relative mx-auto w-[min(540px,92vw)] rounded-2xl bg-[#0b1630] text-white
-                  shadow-2xl ring-1 ring-white/10
-                  grid gap-0 overflow-hidden
-                  animate-[plIn_.22s_ease-out]">
-        <!-- Header -->
-        <div class="px-6 pt-5 pb-4 border-b border-white/10 flex items-start justify-between">
-          <h3 class="text-xl font-extrabold tracking-tight">Eliminar playlist</h3>
-        </div>
+        <!-- Panel -->
+        <div data-modal-panel
+             class="relative mx-auto w-[min(540px,92vw)] rounded-2xl bg-[#0b1630] text-white
+                    shadow-2xl ring-1 ring-white/10
+                    grid gap-0 overflow-hidden
+                    animate-[plIn_.22s_ease-out]">
+          <!-- Header -->
+          <div class="px-6 pt-5 pb-4 border-b border-white/10 flex items-start justify-between">
+            <h3 class="text-xl font-extrabold tracking-tight">Eliminar playlist</h3>
+          </div>
 
-        <!-- Texto -->
-        <div id="pldel-text" class="px-6 py-4 text-white/80">
-          ¿Seguro que quieres borrar <b>…</b>? Esta acción no se puede deshacer.
-        </div>
+          <!-- Texto -->
+          <div id="pldel-text" class="px-6 py-4 text-white/80">
+            ¿Seguro que quieres borrar <b>…</b>? Esta acción no se puede deshacer.
+          </div>
 
-        <!-- Acciones -->
-        <div class="px-6 pb-5 pt-3 flex items-center justify-end gap-3">
-          <button id="pldel-cancel"
-                  class="inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold
-                         text-white/90 bg-white/10 hover:bg-white/15 border border-white/10
-                         focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25 transition">
-            Cancelar
-          </button>
+          <!-- Acciones -->
+          <div class="px-6 pb-5 pt-3 flex items-center justify-end gap-3">
+            <button id="pldel-cancel"
+                    class="inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold
+                           text-white/90 bg-white/10 hover:bg-white/15 border border-white/10
+                           focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25 transition">
+              Cancelar
+            </button>
 
-          <!-- Botón primario “azul-morado” -->
-          <button id="pldel-confirm"
-                  class="inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold
-                          btn-fs btn-fs--hover-purple">
-            Eliminar
-          </button>
+            <!-- Botón primario “azul-morado” -->
+            <button id="pldel-confirm"
+                    class="inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold
+                            btn-fs btn-fs--hover-purple">
+              Eliminar
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+
+      <!-- ==== Modal: Agregar a playlist ==== -->
+      <div id="fs-add-to-pl-modal" class="hidden fixed inset-0 z-[2147483647] grid place-items-center">
+        <!-- Overlay -->
+        <div id="fs-atp-overlay" class="absolute inset-0 bg-black/60"></div>
+        <!-- Card -->
+        <div id="fs-atp-card" class="relative w-[min(640px,92vw)] rounded-2xl bg-[#0B1E5B] text-white shadow-2xl border border-white/10">
+          <!-- Header -->
+          <div class="px-6 pt-5 pb-4 border-b border-white/10">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h3 id="fs-atp-title" class="text-xl font-bold">Agregar a playlist</h3>
+                <p id="fs-atp-sub" class="text-white/70 text-sm mt-1">—</p>
+              </div>
+              <button id="fs-atp-close" class="p-2 rounded-lg hover:bg-white/10" title="Cerrar">
+                <svg class="w-5 h-5 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <!-- Lista (scroll interno) -->
+          <div id="fs-atp-scroll" class="px-2 sm:px-3 pt-2 pb-4 overflow-y-auto max-h-[360px] pr-1">
+            <ul id="fs-atp-list" class="space-y-2"></ul>
+          </div>
+          <!-- Footer -->
+          <div class="px-6 py-4 border-t border-white/10 flex items-center gap-3">
+            <button id="fs-atp-cancel" class="btn-fs !bg-white/10 hover:!bg-white/15 !text-white/90">Cancelar</button>
+            <button id="fs-atp-ok" class="ml-auto btn-fs btn-fs--hover-purple">Hecho</button>
+          </div>
+        </div>
+      </div>
 
 
       <!-- === VIEW: Crear Playlist === -->
@@ -519,11 +566,13 @@
                 </div>
               </div>
             </div>
-            <button id="btn-like" class="ml-2 hidden sm:grid place-items-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20"
-                    aria-label="Agregar a favoritos" aria-pressed="false">
+            <button id="btn-like"
+                    class="ml-2 hidden sm:grid place-items-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 cursor-pointer"
+                    aria-label="Agregar a playlist" aria-pressed="false" type="button">
+              <!-- ícono “+” -->
               <svg class="w-5 h-5 text-white/90" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/>
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"></path>
               </svg>
             </button>
           </div>
@@ -592,7 +641,7 @@
         <audio id="fs-audio" preload="auto" crossorigin="anonymous"></audio>
       </footer>
 
-      <!-- Modal Editar Perfil -->
+      <!-- ===== Modal Editar Perfil ===== -->
       <div id="pf-edit-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-50">
         <div class="w-full max-w-md rounded-2xl bg-slate-900/90 border border-white/10 p-5">
           <h3 class="text-white font-semibold mb-4">Editar perfil</h3>
@@ -655,6 +704,7 @@
   <script src="../static/js/dz.js"></script>
   <script src="../static/js/playlist.js"></script>
   <script src="../static/js/playlist_new.js"></script>
+  <script src="../static/js/modal.js"></script>
 
 
 </body>

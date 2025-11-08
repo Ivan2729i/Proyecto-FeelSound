@@ -422,11 +422,43 @@
         row.querySelector('.plm-artist').textContent = t.artist || t.artists || '—';
         row.querySelector('.plm-time').textContent   = _mmss(t.duration || 30);
 
-        row.addEventListener('click', () => {
+        // --- botón de 3 puntos ---
+        const btnMore = row.querySelector('.plm-more');
+        if (btnMore) {
+          const artistsArr = Array.isArray(t.artists)
+            ? t.artists
+            : (t.artist ? [t.artist] : []);
+
+          btnMore.dataset.trackId      = t.id;
+          btnMore.dataset.trackTitle   = t.title || '';
+          btnMore.dataset.trackArtists = artistsArr.join(', ');
+
+          // abre el modal azul encima del modal de playlist
+          btnMore.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.FSPlaylistPicker?.open) {
+              window.FSPlaylistPicker.open({
+                id: t.id,
+                title: t.title || '',
+                artists: artistsArr
+              });
+            }
+          });
+        }
+
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.plm-more')) return;
+
           if (typeof window.fsPlayTracks === 'function') {
             window.fsPlayTracks(_currentPlTracks, idx);
           } else if (typeof window.replayRecent === 'function') {
-            window.replayRecent({ id: t.id, title: t.title || '', artists: t.artist || t.artists || '', cover: t.cover || '' });
+            window.replayRecent({
+              id: t.id,
+              title: t.title || '',
+              artists: t.artist || t.artists || '',
+              cover: t.cover || ''
+            });
           }
         });
 
@@ -443,6 +475,105 @@
       fitModalScroll();
       setTimeout(fitModalScroll, 0);
   }
+
+  // ======= Favoritos (máx 5) =======
+    const $favList  = document.getElementById('fav-pl-list');
+    const $favEmpty = document.getElementById('fav-pl-empty');
+    const FAV_KEY   = 'fs.favoritePlaylists'; // [{id, nombre, descripcion}]
+
+    // Carga/guarda
+    function favLoad(){
+      try {
+        const raw = localStorage.getItem(FAV_KEY);
+        const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+        // sanea
+        return arr.filter(x => x && Number.isFinite(+x.id)).slice(0,5);
+      } catch { return []; }
+    }
+    function favSave(arr){
+      localStorage.setItem(FAV_KEY, JSON.stringify((arr||[]).slice(0,5)));
+    }
+    function favIs(id){
+      return favLoad().some(x => +x.id === +id);
+    }
+    function favAddTop(pl){
+      const cur = favLoad().filter(x => +x.id !== +pl.id);
+      cur.unshift({ id:+pl.id, nombre: pl.nombre||'Playlist', descripcion: (pl.descripcion||'').trim() });
+      if (cur.length > 5) cur.length = 5;
+      favSave(cur);
+      return cur;
+    }
+    function favRemove(id){
+      const cur = favLoad().filter(x => +x.id !== +id);
+      favSave(cur);
+      return cur;
+    }
+    function favToggle(pl){
+      return favIs(pl.id) ? (favRemove(pl.id), false) : (favAddTop(pl), true);
+    }
+
+    // Render sidebar
+    async function renderFavSidebar(){
+      if (!$favList) return;
+      const favs = favLoad();
+      $favList.innerHTML = '';
+
+      if (!favs.length){
+        $favEmpty?.classList.remove('hidden');
+        return;
+      }
+      $favEmpty?.classList.add('hidden');
+
+      for (const f of favs){
+        const a = document.createElement('a');
+        a.href = `#/playlists/${f.id}`;
+        a.dataset.plid   = String(f.id);
+        a.dataset.plname = f.nombre || 'Playlist';
+        a.dataset.pldesc = (f.descripcion || '').trim();
+        a.className = 'block px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10';
+        a.textContent = f.nombre || 'Playlist';
+        $favList.appendChild(a);
+      }
+    }
+
+    // Abrir modal por ID (misma UX que click en la tarjeta)
+    async function openPlaylistModalById(id, nameHint='', descHint=''){
+      try{
+        plmOpen(nameHint || 'Playlist', (descHint||'').trim());
+        if ($plmList) {
+          $plmList.innerHTML = `<div class="py-4 px-6 text-white/70">Cargando canciones…</div>`;
+        }
+        const det = await fetchPlaylistDetail(+id);
+        $plmTitle && ($plmTitle.textContent = det.nombre || nameHint || 'Playlist');
+        $plmDesc  && ($plmDesc.textContent  = (det.descripcion || descHint || '').trim());
+        renderModalTracks(det.tracks || []);
+        fitModalScroll();
+
+        const needs = (det.tracks||[]).some(t => !t || !t.title || !t.artist || !t.cover);
+        if (needs){
+          const hydrated = await hydrateMissingFromDeezer(det.tracks || []);
+          renderModalTracks(hydrated);
+          fitModalScroll();
+        }
+      }catch(err){
+        console.warn('[FavSidebar] detalle playlist:', err);
+        if ($plmList) {
+          $plmList.innerHTML = `<div class="py-4 px-6 text-red-300">No se pudieron cargar las canciones.</div>`;
+        }
+      }
+    }
+
+    // Delegación de clicks en el sidebar
+    $favList?.addEventListener('click', (e)=>{
+      const a = e.target.closest('a[data-plid]');
+      if (!a) return;
+      e.preventDefault();
+      openPlaylistModalById(+a.dataset.plid, a.dataset.plname, a.dataset.pldesc);
+    });
+
+    // Pinta al cargar
+    renderFavSidebar();
+
 
 
   // ---------- Tarjetas ----------
@@ -463,11 +594,10 @@
       node.dataset.plId = pl.id;
       nameA.dataset.plDesc = (pl.descripcion || pl.description || '').trim();
 
-      // --- EDITAR (rápido: navega primero, carga ids sin hidratar) ---
+      // --- EDITAR  ---
         node.querySelector('.pl-edit')?.addEventListener('click', (ev) => {
           ev.preventDefault();
 
-          // 1) Navega de inmediato y pinta el form con lo que ya sabemos
           window.FEEL = window.FEEL || {};
           window.FEEL.editingPlaylistId   = pl.id;
           window.FEEL.editingPlaylistName = pl.nombre || '';
@@ -502,7 +632,6 @@
             }
           });
         });
-
 
       // ================== Abrir modal de detalle ==================
       nameA.addEventListener('click', async (e) => {
@@ -549,8 +678,31 @@
         openDeleteModal(pl.id, pl.nombre || 'Playlist', node);
       });
 
-      // (Placeholder del corazón/pin si ya agregaste el botón en el HTML)
-      // node.querySelector('.pl-pin')?.addEventListener('click', (ev) => { ... });
+      // ---- FAVORITO (corazón) ----
+        const favBtn = node.querySelector('.pl-fav');
+        if (favBtn){
+          const icon = favBtn.querySelector('svg');
+
+          const setState = (on) => {
+            favBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            if (icon) icon.setAttribute('fill', on ? 'currentColor' : 'none');
+            favBtn.classList.toggle('bg-pink-600/15', on);
+            favBtn.classList.toggle('ring-1', on);
+            favBtn.classList.toggle('ring-pink-500/40', on);
+          };
+
+          setState(favIs(pl.id));
+
+          favBtn.addEventListener('click', (ev)=>{
+            ev.preventDefault();
+            ev.stopPropagation();
+            const nowOn = favToggle({ id: pl.id, nombre: pl.nombre, descripcion: pl.descripcion||'' });
+            setState(nowOn);
+            renderFavSidebar();
+            if (nowOn) flash('success', 'Añadida a favoritas');
+            else       flash('info', 'Quitada de favoritas');
+          });
+        }
 
       return node;
   }
@@ -748,6 +900,9 @@
 
         // Cierra el modal de confirmación
         closeDeleteModal();
+        // Quita de favoritas playlists
+        favRemove(_delCtx.id);
+        renderFavSidebar();
 
         const tNow = (document.getElementById('plm-title')?.textContent || '').trim();
         if (tNow && tNow === (_delCtx.name||'').trim()){

@@ -23,12 +23,13 @@
   let lastRows   = [];
   let seedFromEditingOnce = false;
 
-  // --- reset duro de la vista crear (para cuando NO es edición) ---
+  // --- reset duro de la vista crear ---
   function resetCreateViewHard() {
       // inputs
       if ($name)  $name.value = '';
       if ($desc)  $desc.value = '';
       if ($search) $search.value = '';
+      if ($nameErr) $nameErr.classList.add('hidden');
 
       // estado de búsqueda/selección
       selected.clear();
@@ -99,9 +100,30 @@
     console.log(`[Flash ${type}]`, text);
   }
 
+  function showFieldError($el, msg){
+      if (!$el) return;
+      $el.textContent = msg;
+      $el.classList.remove('hidden');
+  }
+
+  function isDuplicateNameError(err){
+      const code = err?.code;
+      const m = (err?.message || err?.data?.error || err?.data?.detail || '').toLowerCase();
+      return (
+        code === 409 ||
+        m.includes('ya tienes una playlist') ||
+        m.includes('nombre ya existe') ||
+        m.includes('duplicate') ||
+        m.includes('duplicad') ||
+        m.includes('unique constraint') ||
+        m.includes('1062')
+      );
+  }
+
+
   function updateSaveBtn(){
       const nameOK = ($name?.value.trim().length || 0) >= 3;
-      const needTracks = !isEditMode(); // en edición NO obligamos a seleccionar
+      const needTracks = !isEditMode();
       const tracksOK = needTracks ? selected.size >= 1 : true;
 
       const ok = nameOK && tracksOK;
@@ -109,7 +131,6 @@
         $save.classList.toggle('opacity-60', !ok);
         $save.setAttribute('aria-disabled', ok ? 'false' : 'true');
         $save.disabled = !ok;
-        // texto del botón según modo
         $save.textContent = isEditMode() ? 'Guardar cambios' : 'Guardar playlist';
       }
   }
@@ -381,10 +402,16 @@
           },
           body: JSON.stringify(payload)
         });
-        const data = await r.json().catch(()=>null);
+
+        // intenta JSON; si falla, usa texto crudo
+        let data = null, raw = '';
+        try { data = await r.json(); } catch { try { raw = await r.text(); } catch {} }
+
         if (!r.ok || data?.ok === false){
-          const msg = (data && (data.error || data.detail)) || 'Error al crear la playlist.';
-          throw new Error(msg);
+          const msg = (data && (data.error || data.detail)) ||
+                      raw ||
+                      'Error al crear la playlist.';
+          throw Object.assign(new Error(msg), { code: r.status, data });
         }
 
         // limpiar y volver
@@ -397,8 +424,12 @@
         location.hash = '#/playlists';
 
       } catch (e) {
-        flash('error', e.message || 'No se pudo guardar la playlist.');
-      } finally {
+          if (isDuplicateNameError(e)) {
+            showFieldError($nameErr, 'Ya tienes una playlist con ese nombre.');
+            $name?.focus();
+          }
+          flash('error', e.message || 'No se pudo guardar la playlist.');
+        } finally {
         if ($save){
           $save.textContent = oldText || (isEditMode() ? 'Guardar cambios' : 'Guardar playlist');
           $save.disabled = false;

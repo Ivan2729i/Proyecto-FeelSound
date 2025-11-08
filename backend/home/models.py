@@ -45,7 +45,8 @@ class Cancion(models.Model):
 class Playlist(models.Model):
     nombre = models.CharField(max_length=80)
     descripcion = models.TextField(null=True, blank=True)
-    fecha_creacion = models.DateField(auto_now_add=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True, editable=False)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
     es_publica = models.BooleanField(default=False)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="playlists")
     class Meta:

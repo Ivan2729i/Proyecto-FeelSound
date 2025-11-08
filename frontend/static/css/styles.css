@@ -430,3 +430,9 @@ html, body{
 /* Fuerza de tope para el modal */
 #pl-modal { position: fixed; inset: 0; z-index: 2147483647; }
 
+#fs-atp-scroll { scrollbar-width: thin; }
+#fs-atp-scroll::-webkit-scrollbar { width: 8px; }
+#fs-atp-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.2);
+  border-radius: 8px;
+}
