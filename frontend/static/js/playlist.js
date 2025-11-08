@@ -20,11 +20,13 @@
   const $plmScroll  = document.getElementById('plm-scroll');
   const $plmList    = document.getElementById('plm-list');
   const $tplRow     = document.getElementById('tpl-plm-row');
-
   // --- guarda la lista actual del modal para reproducir en orden
   let _currentPlTracks = [];
+  // --- edición de playlist
+  let _editingPlaylistId = null;
 
-  // fallback mm:ss por si no lo tienes global
+
+  // fallback mm:ss
   function _mmss(secs) {
       secs = Math.max(0, Math.floor(+secs || 0));
       const m = Math.floor(secs/60);
@@ -32,8 +34,7 @@
       return `${m}:${s}`;
   }
 
-
-  // panel del modal (el DIV tarjeta dentro del overlay)
+  // panel del modal
   let $plmPanel = null;
 
   // ---------- API base ----------
@@ -41,6 +42,78 @@
     (window.API && window.API.origin) ||
     (window.FEEL?.env?.API_BASE?.replace(/\/api(?:\/v1)?\/?$/,'')) ||
     'http://127.0.0.1:8000';
+
+  async function hydrateMissingFromDeezer(tracks) {
+      const base = API_ORIGIN.replace(/\/+$/,'');
+      if (!Array.isArray(tracks) || !tracks.length) return tracks;
+
+      const needs = tracks.filter(t => !t || !t.title || !t.artist || !t.cover);
+      if (!needs.length) return tracks;
+
+      const byId = {};
+
+      // ---- limitador de concurrencia 4 ----
+      const queue = needs.map(t => t && t.id).filter(Boolean);
+      const workers = Math.min(4, queue.length);
+
+      async function worker() {
+        while (queue.length) {
+          const id = queue.shift();
+          try {
+            // TU ENDPOINT REAL:
+            const r = await fetch(`${base}/api/deezer/track/${encodeURIComponent(id)}/`, {
+              credentials: 'include',
+              headers: { 'Accept':'application/json' }
+            });
+            if (!r.ok) continue;
+            const d = await r.json().catch(()=>null);
+            const src = d?.data || d;
+            if (src?.id) {
+              byId[String(src.id)] = {
+                id: src.id,
+                title: src.title || '',
+                artist: src.artist?.name || '',
+                artists: src.artist?.name ? [src.artist.name] : [],
+                album: src.album?.title || '',
+                cover: src.album?.cover || src.album?.cover_medium || '',
+                duration: (src.duration || 0),
+                preview: src.preview || ''
+              };
+            }
+          } catch(_){}
+        }
+      }
+
+      await Promise.all(Array.from({length: workers}, worker));
+
+      // fusión final (normalizando artists)
+      return tracks.map(t => {
+        const k = String(t.id);
+        const src = byId[k];
+        if (!src) return t;
+
+        const currentArtists = Array.isArray(t.artists)
+          ? t.artists
+          : (typeof t.artists === 'string' && t.artists.trim()
+              ? t.artists.split(/\s*,\s*/).filter(Boolean)
+              : []);
+
+        const mergedArtists = currentArtists.length ? currentArtists : (src.artists || []);
+        const mergedArtist  = t.artist || (mergedArtists[0] || '');
+
+        return {
+          ...t,
+          title:   t.title   || src.title,
+          artist:  mergedArtist,
+          artists: mergedArtists,
+          album:   t.album   || src.album,
+          cover:   t.cover   || src.cover,
+          duration: t.duration || src.duration,
+          preview:  t.preview || src.preview
+        };
+      });
+  }
+
 
   // ---- helpers comunes ----
     function flash(type, text){
@@ -138,7 +211,25 @@
     }));
   }
 
-  // Tu detalle ya trae tracks dentro: nombre, descripcion, tracks[...]
+  // --- ids-only: sin hidratar, súper rápido para modo edición ---
+  async function fetchPlaylistTrackIdsOnly(id) {
+      const d = await apiJSON(`/api/v1/playlists/${id}/`);
+      const nombre      = d?.nombre ?? d?.name ?? 'Playlist';
+      const descripcion = d?.descripcion ?? d?.description ?? '';
+
+      let raw = [];
+      if (Array.isArray(d?.tracks))            raw = d.tracks;
+      else if (Array.isArray(d?.canciones))    raw = d.canciones;
+      else if (Array.isArray(d?.items))        raw = d.items;
+      else if (Array.isArray(d?.data?.tracks)) raw = d.data.tracks;
+
+      const ids = raw
+        .map(x => Number(x.id ?? x.deezer_id ?? x.track_id))
+        .filter(Boolean);
+
+      return { nombre, descripcion, ids };
+  }
+
   async function fetchPlaylistDetail(id) {
     const d = await apiJSON(`/api/v1/playlists/${id}/`);
     const nombre      = d?.nombre ?? d?.name ?? 'Playlist';
@@ -150,21 +241,56 @@
     else if (Array.isArray(d?.items))       rawTracks = d.items;
     else if (Array.isArray(d?.data?.tracks))rawTracks = d.data.tracks;
 
-    const tracks = rawTracks.map(x => ({
-      id      : x.id ?? x.deezer_id ?? x.track_id ?? null,
-      title   : x.title ?? x.titulo ?? '',
-      artist  : x.artist ?? x.artista ?? '',
-      artists : x.artists ?? '',
-      album   : x.album ?? '',
-      cover   : x.cover ?? x.portada ?? x.album_cover ?? (x.album?.cover || ''),
-      duration: x.duration ?? x.duracion ?? 30,
-      preview : x.preview ?? x.preview_url ?? ''
-    }));
+    const tracks = rawTracks.map(x => {
+      // normaliza artistas (array o string)
+      const artistsNorm = Array.isArray(x.artists)
+        ? x.artists
+        : (typeof x.artists === 'string' && x.artists.trim()
+            ? x.artists.split(/\s*,\s*/).filter(Boolean)
+            : []);
 
-    return { nombre, descripcion, tracks };
+      const durationSec =
+        (typeof x.duration_ms === 'number' ? Math.round(x.duration_ms / 1000) :
+         typeof x.duracion_ms === 'number' ? Math.round(x.duracion_ms / 1000) :
+         x.duration ?? x.duracion ?? 30);
+
+      return {
+        id      : x.id ?? x.deezer_id ?? x.track_id ?? null,
+        title   : x.title ?? x.titulo ?? '',
+        artist  : x.artist ?? x.artista ?? (artistsNorm[0] || ''),
+        artists : artistsNorm,
+        album   : x.album ?? '',
+        cover   : x.cover ?? x.cover_url ?? x.portada ?? x.album_cover ?? (x.album?.cover || ''),
+        duration: durationSec,
+        preview : x.preview ?? x.preview_url ?? ''
+      };
+    });
+      const hydrated = await hydrateMissingFromDeezer(tracks);
+      return { nombre, descripcion, tracks: hydrated };
   }
 
-  // ---------- Modal: asegurar visibilidad (centrado + azul) ----------
+
+  function prefillCreateForm(detail){
+      const $name = document.getElementById('plnew-name');
+      const $desc = document.getElementById('plnew-desc');
+
+      if ($name){
+        $name.placeholder = detail?.nombre || 'Nombre de la playlist';
+        $name.value = detail?.nombre || '';
+      }
+      if ($desc){
+        $desc.placeholder = detail?.descripcion || 'Describe tu lista de reproducción…';
+        $desc.value = detail?.descripcion || '';
+      }
+
+      const $save = document.getElementById('plnew-save');
+      if ($save){
+        $save.textContent = _editingPlaylistId ? 'Guardar cambios' : 'Guardar playlist';
+      }
+  }
+
+
+  // ---------- Modal: (centrado + azul) ----------
   function ensureModalOnBody() {
       if (!$plm) return;
       if ($plm.parentElement !== document.body) document.body.appendChild($plm);
@@ -254,25 +380,8 @@
       if ($plmScroll) $plmScroll.scrollTop = 0;
 
       // recalcular alto de scroll interno del modal
-      function fitModalScroll() {
-          if (!$plmPanel || !$plmScroll) return;
-
-          // Altura efectiva del panel (capada a 82vh)
-          const panelRect = $plmPanel.getBoundingClientRect();
-          const panelH = Math.min(window.innerHeight * 0.82, panelRect.height || window.innerHeight * 0.82);
-
-          // Header del modal (título+desc)
-          const header = $plmPanel.querySelector('.border-b') || $plmPanel.firstElementChild;
-          const headH  = header ? header.getBoundingClientRect().height : 72;
-
-          // Padding inferior del body del modal (tienes pb-4 => ~16px) + margen de seguridad
-          const padBottom = 16;
-          const safety    = 8;   // evita cortar la última fila por 1-2px
-
-          const maxH = Math.max(140, Math.floor(panelH - headH - padBottom - safety));
-          $plmScroll.style.maxHeight = `${maxH}px`;
-      }
-
+      fitModalScroll();
+      setTimeout(fitModalScroll, 0);
   }
 
   function plmClose() {
@@ -338,51 +447,114 @@
 
   // ---------- Tarjetas ----------
   function renderCard(pl) {
-    const node  = $tpl.content.firstElementChild.cloneNode(true);
-    const nameA = node.querySelector('.pl-name');
+      const node  = $tpl.content.firstElementChild.cloneNode(true);
+      const nameA = node.querySelector('.pl-name');
 
-    nameA.textContent = pl.nombre || 'Playlist';
-    nameA.href = '#';
-    node.querySelector('.pl-meta').textContent =
-      `Creada el ${fmtDate(pl.fecha_creacion)}`;
-    node.querySelector('.pl-count').textContent =
-      `${pl.track_count ?? 0} ${pl.track_count === 1 ? 'canción' : 'canciones'}`;
-    node.querySelector('.pl-duration').textContent = fmtTime(pl.duration_ms || 0);
+      // ---- Texto/meta ----
+      nameA.textContent = pl.nombre || 'Playlist';
+      nameA.href = '#';
+      node.querySelector('.pl-meta').textContent =
+        `Creada el ${fmtDate(pl.fecha_creacion)}`;
+      node.querySelector('.pl-count').textContent =
+        `${pl.track_count ?? 0} ${pl.track_count === 1 ? 'canción' : 'canciones'}`;
+      node.querySelector('.pl-duration').textContent = fmtTime(pl.duration_ms || 0);
 
-    // datasets para modal
-    node.dataset.plId = pl.id;
-    nameA.dataset.plDesc = (pl.descripcion || pl.description || '').trim();
+      // ---- Data attrs útiles ----
+      node.dataset.plId = pl.id;
+      nameA.dataset.plDesc = (pl.descripcion || pl.description || '').trim();
 
-    // abrir modal
-    nameA.addEventListener('click', async (e) => {
-      e.preventDefault();
-      plmOpen(pl.nombre || 'Playlist', (pl.descripcion || '').trim());
-      if ($plmList) $plmList.innerHTML = `<div class="py-4 px-6 text-white/70">Cargando canciones…</div>`;
+      // --- EDITAR (rápido: navega primero, carga ids sin hidratar) ---
+        node.querySelector('.pl-edit')?.addEventListener('click', (ev) => {
+          ev.preventDefault();
 
-      try {
-        const det = await fetchPlaylistDetail(pl.id);
-        $plmTitle && ($plmTitle.textContent = det.nombre || pl.nombre || 'Playlist');
-        $plmDesc  && ($plmDesc.textContent  = (det.descripcion || '').trim());
-        renderModalTracks(det.tracks || []);
-        fitModalScroll();
-      } catch (err) {
-        console.warn('[Modal] detalle playlist:', err);
-        if ($plmList) $plmList.innerHTML = `<div class="py-4 px-6 text-red-300">No se pudieron cargar las canciones.</div>`;
-      }
-    });
+          // 1) Navega de inmediato y pinta el form con lo que ya sabemos
+          window.FEEL = window.FEEL || {};
+          window.FEEL.editingPlaylistId   = pl.id;
+          window.FEEL.editingPlaylistName = pl.nombre || '';
+          window.FEEL.editingPlaylistDesc = pl.descripcion || '';
 
-    // (Acciones opcionales) compartir / eliminar
-    node.querySelector('.pl-share')?.addEventListener('click', () => {
-      console.log('Compartir (pendiente)');
-    });
-    // Botón eliminar -> abrir confirm
-    node.querySelector('.pl-del')?.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      openDeleteModal(pl.id, pl.nombre || 'Playlist', node);
-    });
+          location.hash = '#/playlist/new';
 
-    return node;
+          requestAnimationFrame(async () => {
+            prefillCreateForm({
+              nombre: window.FEEL.editingPlaylistName,
+              descripcion: window.FEEL.editingPlaylistDesc
+            });
+
+            const $viewCreate = document.getElementById('view-pl-create');
+            if ($viewCreate) { $viewCreate.dataset.mode = 'edit'; $viewCreate.dataset.pid = String(pl.id); }
+
+            try {
+              const det = await fetchPlaylistTrackIdsOnly(pl.id);
+                window.FEEL.editingPlaylistTrackIds = det.ids || [];
+
+                if (det.descripcion && det.descripcion.trim()) {
+                  window.FEEL.editingPlaylistDesc = det.descripcion;
+                  prefillCreateForm({
+                    nombre: window.FEEL.editingPlaylistName,
+                    descripcion: det.descripcion
+                  });
+                }
+                document.dispatchEvent(new CustomEvent('feelsound:seed-editing-tracks'));
+            } catch (e) {
+              console.warn('No se pudieron cargar los IDs para edición', e);
+              window.FEEL.editingPlaylistTrackIds = [];
+            }
+          });
+        });
+
+
+      // ================== Abrir modal de detalle ==================
+      nameA.addEventListener('click', async (e) => {
+          e.preventDefault();
+          plmOpen(pl.nombre || 'Playlist', (pl.descripcion || '').trim());
+
+          // skeleton inmediato
+          if ($plmList) {
+            $plmList.innerHTML = `
+              <div class="py-4 px-6 text-white/70">Cargando canciones…</div>
+            `;
+          }
+
+          try {
+            const det = await fetchPlaylistDetail(pl.id);
+            $plmTitle && ($plmTitle.textContent = det.nombre || pl.nombre || 'Playlist');
+            $plmDesc  && ($plmDesc.textContent  = (det.descripcion || '').trim());
+
+            renderModalTracks(det.tracks || []);
+            fitModalScroll();
+
+            const needsHydration = (det.tracks || []).some(t => !t || !t.title || !t.artist || !t.cover);
+            if (needsHydration) {
+              const hydrated = await hydrateMissingFromDeezer(det.tracks || []);
+              renderModalTracks(hydrated);
+              fitModalScroll();
+            }
+          } catch (err) {
+            console.warn('[Modal] detalle playlist:', err);
+            if ($plmList) {
+              $plmList.innerHTML = `<div class="py-4 px-6 text-red-300">No se pudieron cargar las canciones.</div>`;
+            }
+          }
+      });
+
+      // ================== Acciones extra ==================
+      node.querySelector('.pl-share')?.addEventListener('click', () => {
+        console.log('Compartir (pendiente)');
+      });
+
+      // Eliminar → confirmar en modal
+      node.querySelector('.pl-del')?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        openDeleteModal(pl.id, pl.nombre || 'Playlist', node);
+      });
+
+      // (Placeholder del corazón/pin si ya agregaste el botón en el HTML)
+      // node.querySelector('.pl-pin')?.addEventListener('click', (ev) => { ... });
+
+      return node;
   }
+
 
   // ---------- Render principal ----------
   async function render() {
@@ -415,22 +587,71 @@
   }
 
   // ---------- Router + eventos ----------
-  function route() {
-    const h = (location.hash || '').toLowerCase();
-    const onPlaylists = h.startsWith('#/playlists');
-    $view.hidden = !onPlaylists;
-    if (onPlaylists) render();
-  }
-  window.addEventListener('hashchange', route);
-  window.addEventListener('resize', fitScrollHeight);
-  window.addEventListener('load', fitScrollHeight);
+    function route() {
+      const h = (location.hash || '').toLowerCase();
 
-  if ((location.hash || '').toLowerCase().startsWith('#/playlists')) {
-    $view.hidden = false;
-    render();
-  } else if (!$view.hasAttribute('hidden') || $view.hidden === false) {
-    render();
-  }
+      const onPlaylists = h.startsWith('#/playlists');
+      const onCreate    = h.startsWith('#/playlist/new');
+
+      const $vList  = document.getElementById('view-playlists');
+      const $vForm  = document.getElementById('view-pl-create');
+
+      if ($vList) $vList.hidden = !onPlaylists;
+      if ($vForm) $vForm.hidden = !onCreate;
+
+      // Vista playlists
+      if (onPlaylists) {
+        render().finally(() => fitScrollHeight());
+        document.dispatchEvent(new CustomEvent('feelsound:reset-create-form'));
+        // saliste del formulario -> limpia modo edición
+        if ($vForm) {
+          delete $vForm.dataset.mode;
+          delete $vForm.dataset.pid;
+        }
+        if (window.FEEL) window.FEEL.editingPlaylistId = null;
+      }
+
+      // Vista crear/editar
+      if (onCreate) {
+          const $v = document.getElementById('view-pl-create');
+
+          const fromPencil = !!window.FEEL?.editingPlaylistId;
+          const pid = ($v?.dataset.pid)
+                   || (fromPencil ? String(window.FEEL.editingPlaylistId) : null);
+
+          if (pid) {
+            if ($v) { $v.dataset.mode = 'edit'; $v.dataset.pid = pid; }
+
+            if (fromPencil) {
+              // Prefill inmediato desde FEEL (sin pedir detalle pesado)
+              prefillCreateForm({
+                nombre: window.FEEL.editingPlaylistName || '',
+                descripcion: window.FEEL.editingPlaylistDesc || ''
+              });
+              document.dispatchEvent(new CustomEvent('feelsound:seed-editing-tracks'));
+            } else {
+              // Acceso directo por URL -> un solo fetch de detalle
+              fetchPlaylistDetail(+pid)
+                .then(det => prefillCreateForm(det))
+                .catch(()=>{});
+            }
+          } else {
+            if ($v) { delete $v.dataset.mode; delete $v.dataset.pid; }
+            prefillCreateForm({ nombre: '', descripcion: '' });
+          }
+
+          // asegura alturas del layout principal
+          fitScrollHeight();
+      }
+    }
+
+    window.addEventListener('hashchange', route);
+    window.addEventListener('resize', fitScrollHeight);
+    window.addEventListener('load', fitScrollHeight);
+
+    // pinta la vista correcta al cargar
+    route();
+
 
   // ======== MODAL CONFIRM DELETE ========
     const $plDelModal  = document.getElementById('pl-del-modal');
