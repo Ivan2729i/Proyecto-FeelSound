@@ -15,6 +15,7 @@ from django.shortcuts import redirect, get_object_or_404
 from django.http import HttpResponseRedirect
 from django.db import models
 from django.views.decorators.http import require_http_methods
+from django.utils.timezone import localtime
 
 
 
@@ -427,10 +428,9 @@ def playlists_list(request):
     # Playlists del usuario
     qs = (Playlist.objects
           .filter(usuario=request.user)
-          .order_by("-id")
-          .values("id", "nombre", "descripcion", "es_publica", "fecha_creacion"))
+          .order_by("-id"))
 
-    ids = [p["id"] for p in qs]
+    ids = [p.id for p in qs]
     if not ids:
         return JsonResponse({"data": []})
 
@@ -466,11 +466,12 @@ def playlists_list(request):
 
     data = []
     for p in qs:
-        pid = p["id"]
+        pid = p.id
+        fc_local = localtime(p.fecha_creacion)
         data.append({
             "id": pid,
-            "nombre": p["nombre"],
-            "fecha_creacion": p["fecha_creacion"],
+            "nombre": p.nombre,
+            "fecha_creacion": fc_local.isoformat(),
             "track_count": int(counts.get(pid, 0)),
             "duration_ms": int(dur_map.get(pid) or 0),
             "covers": covers_map.get(pid, []),
@@ -505,56 +506,73 @@ def ensure_cancion_from_deezer_id(deezer_id: int) -> Cancion:
 @login_required
 @require_POST
 def create_playlist(request):
+    # ---------- Parseo seguro ----------
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except Exception:
-        return HttpResponseBadRequest("JSON inválido")
+        return JsonResponse({"ok": False, "error": "JSON inválido"}, status=400)
 
+    # ---------- Campos ----------
     nombre      = (payload.get("nombre") or "").strip()
     descripcion = (payload.get("descripcion") or "").strip()
     es_publica  = bool(payload.get("es_publica", False))
     tracks      = payload.get("tracks") or []
 
-    # Validaciones
+    # ---------- Validaciones ----------
     if len(nombre) < 3:
         return JsonResponse({"ok": False, "error": "El nombre debe tener al menos 3 caracteres."}, status=400)
     if not isinstance(tracks, list) or not tracks:
         return JsonResponse({"ok": False, "error": "Agrega al menos una canción."}, status=400)
 
-    # Normaliza a ints
+    # normalizar a int
     try:
         dz_ids = [int(t) for t in tracks]
     except ValueError:
         return JsonResponse({"ok": False, "error": "tracks debe ser lista de enteros."}, status=400)
 
-    with transaction.atomic():
-        # Crea la playlist
-        pl = Playlist.objects.create(
-            nombre=nombre,
-            descripcion=descripcion,
-            es_publica=es_publica,
-            usuario=request.user,
+    if Playlist.objects.filter(usuario=request.user, nombre__iexact=nombre).exists():
+        return JsonResponse(
+            {"ok": False, "error": "Ya tienes una playlist con ese nombre."},
+            status=409
         )
 
-        local_ids = []
-        pos_map   = {}
-        for idx, dz_id in enumerate(dz_ids, start=1):
-            c = ensure_cancion_from_deezer_id(dz_id)
-            local_ids.append(c.id)
-            pos_map[c.id] = idx
+    try:
+        with transaction.atomic():
+            # ---------- Crear playlist ----------
+            pl = Playlist.objects.create(
+                nombre=nombre,
+                descripcion=descripcion,
+                es_publica=es_publica,
+                usuario=request.user,
+            )
 
-        canciones_qs = Cancion.objects.filter(id__in=local_ids)
-        items = [
-            PlaylistCancion(playlist=pl, cancion=c, posicion=pos_map.get(c.id))
-            for c in canciones_qs
-        ]
-        PlaylistCancion.objects.bulk_create(items, ignore_conflicts=True)
+            # ---------- Vincular canciones ----------
+            local_ids = []
+            pos_map   = {}
+            for idx, dz_id in enumerate(dz_ids, start=1):
+                c = ensure_cancion_from_deezer_id(dz_id)
+                local_ids.append(c.id)
+                pos_map[c.id] = idx
 
-        track_count = len(items)
-        duration_ms = (canciones_qs.aggregate(
-            total=models.Sum(models.F("duracion"))
-        )["total"] or 0) * 1000
+            canciones_qs = Cancion.objects.filter(id__in=local_ids)
+            items = [
+                PlaylistCancion(playlist=pl, cancion=c, posicion=pos_map.get(c.id))
+                for c in canciones_qs
+            ]
+            PlaylistCancion.objects.bulk_create(items, ignore_conflicts=True)
 
+            track_count = len(items)
+            duration_ms = (canciones_qs.aggregate(
+                total=models.Sum(models.F("duracion"))
+            )["total"] or 0) * 1000
+
+    except IntegrityError:
+        return JsonResponse(
+            {"ok": False, "error": "Ya tienes una playlist con ese nombre."},
+            status=409
+        )
+
+    # ---------- OK ----------
     return JsonResponse({
         "ok": True,
         "playlist": {
@@ -569,10 +587,11 @@ def create_playlist(request):
 
 
 @login_required
-@require_http_methods(["GET", "DELETE"])
+@require_http_methods(["GET", "DELETE", "PATCH", "PUT"])
 def playlist_detail(request, pid: int):
     pl = get_object_or_404(Playlist, id=pid, usuario=request.user)
 
+    # DELETE: borrar playlist (con sus enlaces)
     if request.method == "DELETE":
         PlaylistCancion.objects.filter(playlist=pl).delete()
         pl.delete()
@@ -581,6 +600,72 @@ def playlist_detail(request, pid: int):
             "redirect": "/pages/dashboard.html#/playlists"
         }, status=200)
 
+    # PATCH/PUT: nombre/descripcion o add/remove de canción
+    if request.method in ("PATCH", "PUT"):
+        try:
+            data = json.loads(request.body or '{}')
+        except Exception:
+            data = {}
+
+        # --- BLOQUEA campos de fecha que pudieran venir del front ---
+        for k in ("fecha_creacion", "created_at", "fecha_actualizacion", "updated_at"):
+            if k in data:
+                data.pop(k, None)
+
+        action = (data.get('action') or '').lower()
+        track_id = data.get('track_id')
+
+        # 1) Actualizar nombre/descripcion (solo si VIENEN en el payload)
+        changed = False
+
+        if 'nombre' in data:
+            nombre = (data.get('nombre') or '').strip()
+            if nombre:  # no sobre-escribas con vacío
+                pl.nombre = nombre
+                changed = True
+
+        if 'descripcion' in data:
+            # aquí sí permitimos string vacío si explícitamente lo mandan
+            descripcion = (data.get('descripcion') or '')
+            pl.descripcion = descripcion
+            changed = True
+
+        if 'es_publica' in data:
+            pl.es_publica = bool(data.get('es_publica'))
+            changed = True
+
+        if changed:
+            # Guarda SOLO los campos que de verdad cambiaron
+            update_fields = []
+            if 'nombre' in data and (data.get('nombre') or '').strip():
+                update_fields.append('nombre')
+            if 'descripcion' in data:
+                update_fields.append('descripcion')
+            if 'es_publica' in data:
+                update_fields.append('es_publica')
+
+            if update_fields:
+                pl.save(update_fields=update_fields)
+
+        # 2) Agregar / quitar canción (opcional, igual que antes)
+        if action in ('add', 'remove'):
+            if not track_id:
+                return JsonResponse({'detail': 'track_id requerido'}, status=400)
+
+            # Canción puede venir como id interno o deezer_id
+            cancion = (Cancion.objects.filter(id=track_id).first() or
+                       Cancion.objects.filter(deezer_id=str(track_id)).first())
+            if not cancion:
+                return JsonResponse({'detail': 'Canción no encontrada'}, status=404)
+
+            if action == 'add':
+                PlaylistCancion.objects.get_or_create(playlist=pl, cancion=cancion)
+            else:  # remove
+                PlaylistCancion.objects.filter(playlist=pl, cancion=cancion).delete()
+
+        return JsonResponse({'ok': True})
+
+    # GET: detalle como ya lo tenías
     pcs = (PlaylistCancion.objects
            .filter(playlist=pl)
            .select_related("cancion__artista", "cancion__album")
@@ -609,30 +694,6 @@ def playlist_detail(request, pid: int):
         "track_count": len(tracks),
         "duration_ms": total_ms,
         "tracks": tracks,
-    })
-
-@login_required
-@require_http_methods(["PATCH","PUT"])
-def playlist_update(request, pid:int):
-    pl = get_object_or_404(Playlist, id=pid, usuario=request.user)
-    try:
-        data = json.loads(request.body or '{}')
-    except Exception:
-        data = {}
-
-    nombre = (data.get('nombre') or '').strip()
-    descripcion = (data.get('descripcion') or '').strip()
-
-    if nombre:
-        pl.nombre = nombre
-    pl.descripcion = descripcion
-    pl.save(update_fields=['nombre','descripcion'])
-
-    return JsonResponse({
-        "id": pl.id,
-        "nombre": pl.nombre,
-        "descripcion": pl.descripcion or "",
-        "updated": True
     })
 
 # --- FIN: API PLAYLISTS ---

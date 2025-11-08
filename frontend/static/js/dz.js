@@ -40,6 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const moodLabel   = document.getElementById('fs-mood-label');
   const btnRepeatOne= document.getElementById('btn-repeat-one');
   const emolistEl   = document.getElementById('fs-emotions');
+  const btnAddToPl = document.getElementById('btn-like'); // botón “+”
+
+  // Estado inicial: deshabilitado hasta que haya pista cargada
+  if (btnAddToPl) {
+    btnAddToPl.disabled = true;
+    btnAddToPl.classList.add('opacity-50', 'pointer-events-none');
+  }
 
   // Estado
   let currentList = [];
@@ -83,6 +90,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const now = Math.floor(Date.now() / 1000);
       return now >= (exp - 15);
     } catch { return false; }
+  }
+
+  function openAddCurrentToPlaylist() {
+      if (!window.FSPlaylistPicker) return;
+      const t = currentList[currentIndex];
+      if (!t) return;
+      const artists = [t.artist, ...(t.contributors || [])].filter(Boolean);
+      window.FSPlaylistPicker.open({
+        id: t.id,
+        title: t.title || '',
+        artists
+      });
   }
 
   // --- Normalizador para captura ---
@@ -200,36 +219,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Tabla
   const formatRow = (t, i) => {
-    const artistsFull = artistsFullList(t);
-    const artistsLine = artistsInlineText(t);
-    return `
-      <tr class="hover:bg-white/5 transition-colors fs-track-row" data-idx="${i}">
-        <td class="px-4 py-3 text-white/60">${i + 1}</td>
-        <td class="px-4 py-3">
-          <div class="flex items-center gap-3">
-            <img src="${t.cover || ''}" alt="" class="w-12 h-12 rounded-lg object-cover bg-white/10" />
-            <div class="min-w-0">
-              <p class="font-medium text-white truncate max-w-[200px]">${t.title}</p>
-              <p class="text-white/60 text-xs truncate max-w-[260px]" title="${artistsFull}" data-artists="${i}">
-                ${artistsLine}
-              </p>
+      const artistsFull = artistsFullList(t);
+      const artistsLine = artistsInlineText(t);
+      return `
+        <tr class="hover:bg-white/5 transition-colors fs-track-row" data-idx="${i}">
+          <td class="px-4 py-3 text-white/60">${i + 1}</td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-3">
+              <img src="${t.cover || ''}" alt="" class="w-12 h-12 rounded-lg object-cover bg-white/10" />
+              <div class="min-w-0">
+                <p class="font-medium text-white truncate max-w-[200px]">${t.title}</p>
+                <p class="text-white/60 text-xs truncate max-w-[260px]" title="${artistsFull}" data-artists="${i}">
+                  ${artistsLine}
+                </p>
+              </div>
             </div>
-          </div>
-        </td>
-        <td class="px-4 py-3 text-white/60 truncate max-w-[220px]">${t.album || ''}</td>
-        <td class="px-4 py-3 text-white/60">${mmss(t.duration)}</td>
-      </tr>
-    `;
+          </td>
+          <td class="px-4 py-3 text-white/60 truncate max-w-[220px]">${t.album || ''}</td>
+          <td class="px-4 py-3 text-white/60 tabular-nums">${mmss(t.duration)}</td>
+          <td class="px-2 py-3">
+            <button class="song-more p-2 rounded hover:bg-white/10"
+                    title="Opciones"
+                    data-track-id="${t.id}"
+                    data-track-title="${(t.title||'').replace(/"/g,'&quot;')}"
+                    data-track-artists="${(artistsFullList(t)||'').replace(/"/g,'&quot;')}">
+              <svg class="w-5 h-5 text-white/70" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="2"></circle>
+                <circle cx="12" cy="12" r="2"></circle>
+                <circle cx="19" cy="12" r="2"></circle>
+              </svg>
+            </button>
+          </td>
+        </tr>
+      `;
   };
 
   const wireRows = () => {
-    tbody.querySelectorAll('tr.fs-track-row').forEach(row => {
-      row.addEventListener('click', () => {
-        const idx = parseInt(row.dataset.idx, 10);
-        playIndex(idx, /*fromUserGesture=*/true);
+      tbody.querySelectorAll('tr.fs-track-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.song-more')) return; // evita play si fue el botón
+          const idx = parseInt(row.dataset.idx, 10);
+          playIndex(idx, /*fromUserGesture=*/true);
+        });
       });
-    });
   };
+
+  // Abrir modal "Agregar a playlist" desde el botón de 3 puntos
+  tbody?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.song-more');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const id = btn.dataset.trackId;
+      const title = btn.dataset.trackTitle || 'Canción';
+      const artists = (btn.dataset.trackArtists || '')
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(Boolean);
+
+      // modal.js debe exponer FSPlaylistPicker.open(...)
+      if (id && window.FSPlaylistPicker?.open) {
+        window.FSPlaylistPicker.open({ id, title, artists });
+      }
+  });
 
   // --- Búsqueda ---
   if (inpSearch) {
@@ -246,11 +299,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function doSearch(q) {
     if (!q) return;
-    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Buscando “${q}”…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-white/70">Buscando “${q}”…</td></tr>`;
     try {
       const data = await window.apiFetchRoot(ROUTES.deezerSearch(q));
       if (!data || !Array.isArray(data?.data)) {
-        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Sin backend disponible (modo demo). Intenta más tarde.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-white/70">Sin backend disponible (modo demo). Intenta más tarde.</td></tr>`;
         return;
       }
       const list = data.data;
@@ -269,11 +322,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       currentList = items;
       currentIndex = -1;
+      if (btnAddToPl) {
+        btnAddToPl.disabled = true;
+        btnAddToPl.classList.add('opacity-50', 'pointer-events-none');
+      }
       window.currentList = currentList;
       window.currentIndex = currentIndex;
 
       if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Sin resultados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-white/70">Sin resultados.</td></tr>`;
         return;
       }
 
@@ -282,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
       enrichContributors(currentList);
       localStorage.setItem('fs_last_query', q);
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-red-300">Error: ${err?.message || err}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-red-300">Error: ${err?.message || err}</td></tr>`;
       console.error('[FS] Error en doSearch', err);
     }
   }
@@ -332,7 +389,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadTrack(t) {
-    if (!t.preview) return false;
+    if (!t.preview) {
+        if (btnAddToPl) {
+          btnAddToPl.disabled = true;
+          btnAddToPl.classList.add('opacity-50', 'pointer-events-none');
+        }
+        return false;
+    }
     audio.src = t.preview;
     audio.currentTime = 0;
 
@@ -359,6 +422,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (seekEl)  seekEl.value = 0;
 
     renderEmotions([]);
+    // habilita el botón “+” para esta pista
+    if (btnAddToPl) {
+      btnAddToPl.disabled = false;
+      btnAddToPl.classList.remove('opacity-50', 'pointer-events-none');
+      btnAddToPl.setAttribute('aria-label', `Agregar a playlist: ${t.title || ''}`);
+    }
     return true;
   }
 
@@ -619,6 +688,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextIndex = (currentIndex + 1) % currentList.length;
     playIndex(nextIndex, true);
   });
+  // Abrir modal para agregar la pista actual a una playlist
+  btnAddToPl?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openAddCurrentToPlaylist();
+  });
+
 
   // Seek / tiempo
   seekEl?.addEventListener('input', () => {
@@ -676,11 +751,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadEmotionList(emocionClave) {
-    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Cargando ${emocionClave}…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-white/70">Cargando ${emocionClave}…</td></tr>`;
     try {
       const data = await window.apiFetchRoot(ROUTES.songsByEmotion(emocionClave, 25));
       if (!data) {
-        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Sin backend disponible (modo demo).</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-white/70">Sin backend disponible (modo demo).</td></tr>`;
         return;
       }
       const items = (data.results || []).map(x => ({
@@ -701,7 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
       if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-white/70">Aún no hay canciones para <b>${emocionClave}</b>. Reproduce desde la búsqueda para sembrarlas ✨</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-white/70">Aún no hay canciones para <b>${emocionClave}</b>. Reproduce desde la búsqueda para sembrarlas ✨</td></tr>`;
         return;
       }
 
@@ -710,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       warmPreviews(currentList, 10, 4);
     } catch {
-      tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-red-300">Error cargando ${emocionClave}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-red-300">Error cargando ${emocionClave}</td></tr>`;
     }
   }
 

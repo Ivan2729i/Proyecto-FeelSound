@@ -13,5 +13,4 @@ urlpatterns = [
     path("api/v1/playlists/", views.playlists_list, name="playlists_list"),
     path("api/v1/playlists/create", views.create_playlist, name="pl_create"),
     path("api/v1/playlists/<int:pid>/", views.playlist_detail, name="playlist-detail"),
-    path("api/v1/playlists/<int:pid>/", views.playlist_update, name="playlist_update"),
 ]
