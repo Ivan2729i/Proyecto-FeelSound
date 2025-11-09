@@ -134,8 +134,6 @@ async function hydrateUser({ force = false } = {}) {
         if (prevOwner && curOwner && prevOwner !== curOwner) {
            // limpia estado transitorio, pero NO borres todas las stats
            wipeUserState();
-           // si quieres, borra sólo stats del usuario anterior:
-           // purgeStatsOf(prevOwner);
            broadcastSessionSwitch(prevOwner, curOwner);
         }
         if (curOwner) localStorage.setItem(OWNER_KEY, curOwner);
@@ -308,7 +306,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
       mood_counts: { happy:0, sad:0, love:0, angry:0, calm:0, neutral:0 },
       recent_tracks: [],
       library_count: 0,
-      favorites_count: 0
+      playlists_count: 0
     };
     try {
       const raw = localStorage.getItem(LS_KEY);
@@ -362,7 +360,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
         z('pf-listen-time', '0 min');
         z('pf-fav-mood', '—');
         z('pf-total-plays', '0');
-        z('pf-fav-count', '0');
+        z('pf-pl-count', '0');
 
         // Lista de recientes vacía
         document.getElementById('pf-recent-list')?.replaceChildren();
@@ -636,11 +634,11 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     const $time = document.getElementById('pf-listen-time');
     const $favm = document.getElementById('pf-fav-mood');
     const $plays= document.getElementById('pf-total-plays');
-    const $favs = document.getElementById('pf-fav-count');
+    const $favs = document.getElementById('pf-pl-count');
     if ($time)  $time.textContent  = formatListen(stats.listening_ms_total || 0);
     if ($favm)  $favm.textContent  = favMood(stats.mood_counts);
     if ($plays) $plays.textContent = stats.total_plays || 0;
-    if ($favs)  $favs.textContent  = (stats.favorites_count ?? 0);
+    if ($favs)  $favs.textContent  = (stats.playlists_count ?? 0);
 
     const cont = document.getElementById('pf-recent-list');
     if (!cont) return;
@@ -677,6 +675,18 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     });
   }
 
+  window.refreshPlaylistsCount = async function refreshPlaylistsCount() {
+      try {
+        if (!window.API?.v1Base) return;
+        const data = await window.apiFetchV1('/me/summary/', { cache: 'no-store' });
+        if (data && typeof data.playlists_count === 'number') {
+          window.setPlaylistsCount(data.playlists_count);
+        }
+      } catch (e) {
+        console.warn('No pude obtener /me/summary', e);
+      }
+  };
+
   function setActive(navEl, isActive) {
     if (!navEl) return;
     navEl.classList.toggle('bg-white/15', isActive);
@@ -684,7 +694,6 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     navEl.classList.toggle('text-white/80', !isActive);
   }
 
-  // Cambiado a async y ahora espera al usuario fresco antes de pintar
   async function showView(view) {
       const isProfile   = view === 'perfil';
       const isDashboard = view === 'dashboard';
@@ -706,6 +715,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
       if (isProfile) {
         await ensureProfileBootstrapped();
         renderProfile();
+        window.refreshPlaylistsCount();
       }
       if (!cachedUser) renderHeaderUser(null);
 
@@ -734,6 +744,10 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     location.hash = '#/dashboard';
     await routeFromHash();
   });
+
+  document.addEventListener('feel:playlist-created', () => window.refreshPlaylistsCount());
+  document.addEventListener('feel:playlist-deleted',  () => window.refreshPlaylistsCount());
+
 })();
 
 
@@ -754,7 +768,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
       mood_counts: { happy:0, sad:0, love:0, angry:0, calm:0, neutral:0 },
       recent_tracks: [],
       library_count: 0,
-      favorites_count: 0
+      playlists_count: 0
     };
     try {
       const raw = localStorage.getItem(LS_KEY);
@@ -790,11 +804,11 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     const elTime = document.getElementById('pf-listen-time');
     const elMood = document.getElementById('pf-fav-mood');
     const elPlays= document.getElementById('pf-total-plays');
-    const elFavs = document.getElementById('pf-fav-count');
+    const elFavs = document.getElementById('pf-pl-count');
     if (elTime) elTime.textContent = formatListen(stats.listening_ms_total || 0);
     if (elMood) elMood.textContent = favMoodLabel(stats.mood_counts);
     if (elPlays) elPlays.textContent = stats.total_plays || 0;
-    if (elFavs) elFavs.textContent = (stats.favorites_count ?? 0);
+    if (elFavs) elFavs.textContent = (stats.playlists_count ?? 0);
   };
 
   function pushRecent(track) {
@@ -865,7 +879,45 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
   initStatsForCurrentUser();
 })();
 
+window.markMoodClick = function markMoodClick(mood) {
+  const LS_KEY = getStatsKey();
+  const raw = localStorage.getItem(LS_KEY);
+  const stats = raw ? JSON.parse(raw) : {};
+  stats.mood_counts = Object.assign({ happy:0, sad:0, love:0, angry:0, calm:0, neutral:0 }, stats.mood_counts || {});
+  if (stats.mood_counts[mood] != null) {
+    stats.mood_counts[mood] += 1;
+    localStorage.setItem(LS_KEY, JSON.stringify(stats));
+    if (typeof window.renderProfileStats === 'function') window.renderProfileStats();
+  }
+};
 
+// Delegación: cualquier botón con data-mood-click="happy|sad|love|angry|calm|neutral"
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-mood-click]');
+  if (!btn) return;
+  const mood = btn.getAttribute('data-mood-click');
+  if (mood) window.markMoodClick(mood);
+});
+
+
+window.setPlaylistsCount = function setPlaylistsCount(n) {
+  try {
+    const LS_KEY = getStatsKey();
+    const raw = localStorage.getItem(LS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    obj.playlists_count = Math.max(0, parseInt(n || 0, 10));
+    localStorage.setItem(LS_KEY, JSON.stringify(obj));
+    if (typeof window.renderProfileStats === 'function') {
+      window.renderProfileStats();
+    }
+  } catch {}
+};
+
+document.addEventListener('feel:playlists-updated', (ev) => {
+  if (typeof ev.detail?.count === 'number') {
+    window.setPlaylistsCount(ev.detail.count);
+  }
+});
 
 
 // --- Hook de mensajes backend ---

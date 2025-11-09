@@ -59,3 +59,4 @@ class AvatarUploadView(views.APIView):
         u.profile_picture = file
         u.save(update_fields=["profile_picture"])
         return Response({"avatar_url": u.profile_picture.url}, status=200)
+

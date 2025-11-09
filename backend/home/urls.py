@@ -16,4 +16,6 @@ urlpatterns = [
     path("api/v1/playlists/<int:pid>/share/copy-link", views.share_copy_link, name="share_copy_link"),
     path("api/v1/share/copy/preview", views.share_copy_preview, name="share_copy_preview"),
     path("api/v1/share/copy/import", views.share_copy_import, name="share_copy_import"),
+    path("api/v1/me/summary/", views.MeSummaryView.as_view(), name="me-summary"),
+    path("api/v1/me/summary",  views.MeSummaryView.as_view()),
 ]
