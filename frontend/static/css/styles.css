@@ -43,7 +43,7 @@ html, body{
 /* ============ UTILIDADES ============ */
 
 /* Evita scroll global; el scroll será solo en el área de contenido */
-html, body { height: 100%; margin: 0; overflow: hidden; }
+html.app, body.app { overflow: hidden; height: 100%; }
 
 /* Asegura barra del player fija y que no participe en el flujo */
 #fs-playerbar { position: fixed; left: 0; right: 0; bottom: 0; }

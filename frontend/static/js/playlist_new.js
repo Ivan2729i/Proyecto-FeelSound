@@ -327,23 +327,20 @@
         if (isEditMode()){
           const pid = getEditingId();
 
-          // 1) UNIÓN de tracks: lo existente + lo seleccionado ahora (sin duplicados)
           const existing = Array.isArray(window.FEEL?.editingPlaylistTrackIds)
             ? window.FEEL.editingPlaylistTrackIds : [];
           const addedNow = Array.from(selected.keys()).map(id => Number(id));
           const unionIds = Array.from(new Set([...existing, ...addedNow]));
 
-          // 2) Payload definitivo con el MISMO nombre (evita cambiar constraint único)
           const tracksFullNew = buildTracksFullFromSelected(selected);
           const payload = {
               nombre: name,
               descripcion: ($desc?.value || '').trim(),
               es_publica: false,
-              tracks: unionIds,          // retro-compat con tu API actual
-              tracks_full: tracksFullNew // NUEVO: metadatos de los que el usuario acaba de agregar
+              tracks: unionIds,
+              tracks_full: tracksFullNew
           };
 
-          // 3) Delete → Create (en ese orden) para evitar 1062 y endpoints 405/404
           await apiDeletePlaylistLocal(pid);
 
           const urlC = `${API_ORIGIN.replace(/\/+$/,'')}/api/v1/playlists/create`;
@@ -363,7 +360,6 @@
             throw new Error(msg);
           }
 
-          // 4) Limpia estado de edición para poder editar otra vez sin arrastrar cosas
           if (window.FEEL) {
             delete window.FEEL.editingPlaylistId;
             delete window.FEEL.editingPlaylistName;
@@ -373,9 +369,11 @@
           const $viewCreate = document.getElementById('view-pl-create');
           if ($viewCreate){ delete $viewCreate.dataset.mode; delete $viewCreate.dataset.pid; }
           seedFromEditingOnce = false;
-          selected.clear(); // que no se acumulen en la siguiente edición
+          selected.clear();
 
           flash('success', 'Playlist actualizada exitosamente.');
+          document.dispatchEvent(new CustomEvent('feel:playlist-created'));
+          window.refreshPlaylistsCount?.();
           location.hash = '#/playlists';
           return;
         }
@@ -421,6 +419,8 @@
         syncIcons?.();
         updateSaveBtn?.();
         flash('success', 'Playlist creada.');
+        document.dispatchEvent(new CustomEvent('feel:playlist-created'));
+        window.refreshPlaylistsCount?.();
         location.hash = '#/playlists';
 
       } catch (e) {

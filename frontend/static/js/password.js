@@ -1,4 +1,4 @@
-// frontend/static/js/password.js
+
 document.addEventListener('DOMContentLoaded', () => {
   // Alterna visibilidad al hacer click en el botón
   document.querySelectorAll('[data-password-toggle]').forEach((btn) => {
@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Sincroniza iconos al cargar (por si el input viene como password)
+    // Sincroniza iconos al cargar
     const targetId = btn.dataset.target;
     if (!targetId) return;
     const input = document.getElementById(targetId);
@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const eyeClosed = btn.querySelector('[data-icon="eye-closed"]');
     if (eyeOpen && eyeClosed) {
       const isHidden = input.type === 'password';
-      eyeOpen.classList.toggle('hidden', isHidden);   // si está oculto, ocultamos el "ojo abierto"
+      eyeOpen.classList.toggle('hidden', isHidden);
       eyeClosed.classList.toggle('hidden', !isHidden);
     }
   });

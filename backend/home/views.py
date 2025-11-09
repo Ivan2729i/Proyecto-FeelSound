@@ -19,7 +19,20 @@ from django.utils.timezone import localtime
 from django.core.cache import cache
 from .utils_share import generate_share_token, verify_share_token, ShareTokenError
 import time
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
+
+
+class MeSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        pl_count = Playlist.objects.filter(usuario=request.user).count()
+        return Response({
+            "playlists_count": pl_count
+        })
 
 
 # --- INICIO: LÓGICA DEL REPRODUCTOR ---
