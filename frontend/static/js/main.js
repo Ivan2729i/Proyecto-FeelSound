@@ -16,16 +16,21 @@ FEEL.env = FEEL.env || {};
 
 // --- Limpieza de estado por cambio de usuario ---
 const OWNER_KEY = "fs_owner_id_v3";
-const PREFIXES  = ["fs_", "feelsound_", "dz_", "fs_profile_stats_v1"];
+const PREFIXES  = ["fs_", "feelsound_", "dz_"];
+const STATS_PREFIX = "fs_profile_stats_v1::";
 
 function wipeUserState() {
   try {
     // localStorage / sessionStorage
     for (const k of Object.keys(localStorage)) {
-      if (PREFIXES.some(p => k.startsWith(p))) localStorage.removeItem(k);
+      if (PREFIXES.some(p => k.startsWith(p)) && !k.startsWith(STATS_PREFIX)) {
+        localStorage.removeItem(k);
+      }
     }
     for (const k of Object.keys(sessionStorage)) {
-      if (PREFIXES.some(p => k.startsWith(p))) sessionStorage.removeItem(k);
+      if (PREFIXES.some(p => k.startsWith(p)) && !k.startsWith(STATS_PREFIX)) {
+        sessionStorage.removeItem(k);
+      }
     }
     // CacheStorage (si hay Service Worker)
     if (window.caches) {
@@ -81,6 +86,9 @@ function broadcastSessionSwitch(prevOwner, curOwner){
   } catch {}
 }
 
+let __meAbort = null;
+function __sameStr(a,b){ return String(a ?? '') === String(b ?? ''); }
+
 async function hydrateUser({ force = false } = {}) {
   const CKEY = 'fs_user_cache_v1';
   if (!__bootFetched) { force = true; __bootFetched = true; }
@@ -88,57 +96,78 @@ async function hydrateUser({ force = false } = {}) {
   const cachedObj = JSON.parse(localStorage.getItem(CKEY) || 'null');
   const fresh = cachedObj && (Date.now() - cachedObj.ts) < 60_000;
 
-  if (!force && cachedObj?.data) {
-    const u = cachedObj.data;
-    if (__lastUserId !== u?.id) {
-      __lastUserId = u?.id;
-      UserStore.set(u);
-      renderHeaderUser(u);
-      document.dispatchEvent(new CustomEvent('feel:user-ready', { detail: u }));
-    } else {
-      UserStore.set(u);
-      renderHeaderUser(u);
-    }
+  // owner actual (si existe) y owner del caché
+  const ownerLS   = localStorage.getItem(OWNER_KEY) || null;
+  const cacheOwner= (cachedObj && (cachedObj.owner ?? cachedObj.data?.id ?? null));
+  const cacheMatchesOwner = __sameStr(ownerLS, cacheOwner);
+
+  // Si el caché no pertenece al owner actual, lo ignoramos y lo purgamos
+  if (cachedObj && !cacheMatchesOwner) {
+      try { localStorage.removeItem(CKEY); } catch {}
   }
 
-  if (force || !fresh) {
-    try {
-      const data = await window.apiFetchV1('/me', { cache: 'no-store' }); // <- no-store
-
-      const prevOwner = localStorage.getItem(OWNER_KEY);
-      const curOwner  = (data?.id != null) ? String(data.id) : null;
-
-      if (prevOwner && curOwner && prevOwner !== curOwner) {
-        // usuario cambió: limpiar y avisar
-        wipeUserState();
-        broadcastSessionSwitch(prevOwner, curOwner);
-      }
-      if (curOwner) localStorage.setItem(OWNER_KEY, curOwner);
-
-      localStorage.setItem(CKEY, JSON.stringify({ ts: Date.now(), data }));
-      if (data?.email) localStorage.setItem('fs_user_email', data.email);
-      if (data?.id)    localStorage.setItem('fs_user_id', String(data.id));
-
-      if (__lastUserId !== data?.id) {
-        __lastUserId = data?.id;
-        UserStore.set(data);
-        renderHeaderUser(data);
-        document.dispatchEvent(new CustomEvent('feel:user-ready', { detail: data }));
+  // Usamos caché SOLO si: no hay force, está fresco y coincide el owner
+  if (!force && fresh && cacheMatchesOwner && cachedObj?.data) {
+      const u = cachedObj.data;
+      if (__lastUserId !== u?.id) {
+        __lastUserId = u?.id;
+        UserStore.set(u);
+        renderHeaderUser(u);
+        document.dispatchEvent(new CustomEvent('feel:user-ready', { detail: u }));
       } else {
-        UserStore.set(data);
-        renderHeaderUser(data);
+        UserStore.set(u);
+        renderHeaderUser(u);
       }
-      return data;
-    } catch (e) {
-      console.warn('hydrateUser:', e);
-      if (__lastUserId !== null) {
-        __lastUserId = null;
-        UserStore.set(null);
-        renderHeaderUser(null);
-        document.dispatchEvent(new CustomEvent('feel:user-ready', { detail: null }));
+  }
+
+
+  if (force || !fresh) {
+      try {
+        if (__meAbort) { __meAbort.abort(); }
+        __meAbort = new AbortController();
+
+        const data = await window.apiFetchV1('/me', { cache: 'no-store', signal: __meAbort.signal });
+
+        const prevOwner = localStorage.getItem(OWNER_KEY);
+        const curOwner  = (data?.id != null) ? String(data.id) : null;
+
+        if (prevOwner && curOwner && prevOwner !== curOwner) {
+           // limpia estado transitorio, pero NO borres todas las stats
+           wipeUserState();
+           // si quieres, borra sólo stats del usuario anterior:
+           // purgeStatsOf(prevOwner);
+           broadcastSessionSwitch(prevOwner, curOwner);
+        }
+        if (curOwner) localStorage.setItem(OWNER_KEY, curOwner);
+
+        localStorage.setItem(CKEY, JSON.stringify({ ts: Date.now(), owner: curOwner, data }));
+        if (data?.email) localStorage.setItem('fs_user_email', data.email);
+        if (data?.id)    localStorage.setItem('fs_user_id', String(data.id));
+
+        if (__lastUserId !== data?.id) {
+          __lastUserId = data?.id;
+          UserStore.set(data);
+          renderHeaderUser(data);
+          document.dispatchEvent(new CustomEvent('feel:user-ready', { detail: data }));
+        } else {
+          UserStore.set(data);
+          renderHeaderUser(data);
+        }
+        return data;
+
+      } catch (e) {
+        console.warn('hydrateUser:', e);
+        if (__lastUserId !== null) {
+          __lastUserId = null;
+          UserStore.set(null);
+          renderHeaderUser(null);
+          document.dispatchEvent(new CustomEvent('feel:user-ready', { detail: null }));
+        }
+        return null;
+
+      } finally {
+        __meAbort = null;
       }
-      return null;
-    }
   }
 
   return cachedObj?.data || null;
@@ -270,9 +299,9 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
   const $navPL         = document.querySelector('a[href="#/playlists"]');
   const $navCreate     = document.querySelector('a[href="#/playlist/new"]');
 
-  const LS_KEY = getStatsKey();
 
   function loadStats() {
+    const LS_KEY = getStatsKey();
     const def = {
       total_plays: 0,
       listening_ms_total: 0,
@@ -286,7 +315,10 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
       return raw ? Object.assign(def, JSON.parse(raw)) : def;
     } catch { return def; }
   }
-  function saveStats(s) { localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+  function saveStats(s) {
+    const LS_KEY = getStatsKey();
+    localStorage.setItem(LS_KEY, JSON.stringify(s));
+  }
 
   function formatListen(ms) {
     const h = Math.floor(ms/3600000);
@@ -303,6 +335,58 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     return map[entries[0][0]] || entries[0][0];
   }
   const escAttr = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function clearProfile() {
+      try {
+        const avatarEl = document.getElementById('pf-avatar');
+        const nameEl   = document.getElementById('pf-name');
+        const userEl   = document.getElementById('pf-username');
+        const bioEl    = document.getElementById('pf-bio');
+        const emailEl  = document.getElementById('pf-email');
+        const memberEl = document.getElementById('pf-member-since');
+        const topU     = document.getElementById('pf-username-top');
+
+        if (avatarEl) {
+          const def = avatarEl.dataset.defaultSrc || avatarEl.getAttribute('data-default-src') || avatarEl.src;
+          avatarEl.src = def || '';
+        }
+        if (nameEl)  nameEl.textContent   = 'Usuario';
+        if (userEl)  userEl.textContent   = 'usuario';
+        if (bioEl)   bioEl.textContent    = 'Amante de la música';
+        if (emailEl) emailEl.textContent  = 'usuario@example.com';
+        if (memberEl) memberEl.textContent= '—';
+        if (topU) topU.textContent = '@invitado';
+
+        // Tarjetas de estadísticas a cero
+        const z = (id, val) => { const el=document.getElementById(id); if (el) el.textContent = val; };
+        z('pf-listen-time', '0 min');
+        z('pf-fav-mood', '—');
+        z('pf-total-plays', '0');
+        z('pf-fav-count', '0');
+
+        // Lista de recientes vacía
+        document.getElementById('pf-recent-list')?.replaceChildren();
+      } catch {}
+  }
+
+  // Cuando llega el usuario (o null), pinta o limpia
+  document.addEventListener('feel:user-ready', (ev) => {
+      const me = ev.detail;
+      if (!document.getElementById('view-profile')) return;
+      if (me) {
+        paintUser(me);
+        if (!document.getElementById('view-profile')?.hidden) renderProfile();
+      } else {
+        clearProfile();
+      }
+  });
+
+  // Al cambiar de sesión, limpia inmediatamente
+  document.addEventListener('feel:session-switched', () => {
+      clearProfile();
+      try { document.getElementById('pf-recent-list')?.replaceChildren(); } catch {}
+  });
+
 
   // ===== Perfil: origen de datos =====
   async function fetchMe() {
@@ -547,13 +631,6 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     } catch (e) { console.warn(e); }
   }
 
-  document.addEventListener('feel:user-ready', (ev) => {
-    const me = ev.detail;
-    if (me && !document.getElementById('view-profile')?.hidden) {
-      paintUser(me);
-    }
-  });
-
   function renderProfile() {
     const stats = loadStats();
     const $time = document.getElementById('pf-listen-time');
@@ -607,29 +684,38 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     navEl.classList.toggle('text-white/80', !isActive);
   }
 
-  // ⬇️ Cambiado a async y ahora espera al usuario fresco antes de pintar
+  // Cambiado a async y ahora espera al usuario fresco antes de pintar
   async function showView(view) {
-    await hydrateUser({ force: true }); // <- crítico para que no “herede” datos del usuario previo
+      const isProfile   = view === 'perfil';
+      const isDashboard = view === 'dashboard';
+      const isPlaylists = view === 'playlists';
+      const isCreate    = view === 'pl-create';
 
-    const isProfile   = view === 'perfil';
-    const isDashboard = view === 'dashboard';
-    const isPlaylists = view === 'playlists';
-    const isCreate    = view === 'pl-create';
+      if ($viewDashboard) $viewDashboard.hidden = !isDashboard;
+      if ($viewProfile)   $viewProfile.hidden   = !isProfile;
+      if ($viewPL)        $viewPL.hidden        = !isPlaylists;
+      if ($viewCreate)    $viewCreate.hidden    = !isCreate;
 
-    if ($viewDashboard) $viewDashboard.hidden = !isDashboard;
-    if ($viewProfile)   $viewProfile.hidden   = !isProfile;
-    if ($viewPL)        $viewPL.hidden        = !isPlaylists;
-    if ($viewCreate)    $viewCreate.hidden    = !isCreate;
+      setActive($navDash,   isDashboard);
+      setActive($navPerfil, isProfile);
+      setActive($navPL,     isPlaylists);
+      setActive($navCreate, isCreate);
 
-    setActive($navDash,   isDashboard);
-    setActive($navPerfil, isProfile);
-    setActive($navPL,     isPlaylists);
-    setActive($navCreate, isCreate);
+      // pinta con lo que haya en memoria
+      const cachedUser = UserStore.get();
+      if (isProfile) {
+        await ensureProfileBootstrapped();
+        renderProfile();
+      }
+      if (!cachedUser) renderHeaderUser(null);
 
-    if (isProfile) { await ensureProfileBootstrapped(); renderProfile(); }
+      // refresca en background SIN bloquear la vista
+      hydrateUser({ force: true }).then((u) => {
+        if (isProfile) { renderProfile(); }
+      }).catch(()=>{});
 
-    // Notificar a otras vistas/componentes que cambió la vista
-    document.dispatchEvent(new CustomEvent('feel:view-changed', { detail: { view } }));
+      // Notifica cambio de vista
+      document.dispatchEvent(new CustomEvent('feel:view-changed', { detail: { view } }));
   }
 
   async function routeFromHash() {
@@ -643,7 +729,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
   window.addEventListener('hashchange', () => { routeFromHash(); });
   routeFromHash();
 
-  // 🔔 Si la sesión cambia (logout/login con otro usuario), forzamos navegación limpia y repintado
+  // Si la sesión cambia (logout/login con otro usuario), forzamos navegación limpia y repintado
   document.addEventListener('feel:session-switched', async () => {
     location.hash = '#/dashboard';
     await routeFromHash();
@@ -653,9 +739,10 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 
 // ======== Stats (player, emociones, favoritos) ========
 (function () {
-  const LS_KEY = getStatsKey();
+  let LS_KEY = getStatsKey();
   const audio  = document.getElementById('fs-audio');
 
+  let stats = null;
   let sessionStartMs = null;
   let countedPlayForTrack = false;
   let currentTrack = null;
@@ -675,7 +762,6 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     } catch { return def; }
   }
   function saveStats(s) { localStorage.setItem(LS_KEY, JSON.stringify(s)); }
-  const stats = loadStats();
 
   function formatListen(ms) {
     const h = Math.floor(ms/3600000);
@@ -692,7 +778,15 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     return map[entries[0][0]] || entries[0][0];
   }
 
+  function initStatsForCurrentUser() {
+    LS_KEY = getStatsKey();
+    stats = loadStats();
+    window.renderProfileStats(); // actualiza cuadros del perfil si están a la vista
+  }
+
+  // API usada por el perfil
   window.renderProfileStats = function renderProfileStats() {
+    if (!stats) initStatsForCurrentUser();
     const elTime = document.getElementById('pf-listen-time');
     const elMood = document.getElementById('pf-fav-mood');
     const elPlays= document.getElementById('pf-total-plays');
@@ -704,6 +798,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
   };
 
   function pushRecent(track) {
+    if (!stats) initStatsForCurrentUser();
     if (!track) return;
     const norm = v => (v || '').toString().trim().toLowerCase();
     const sameTrack = (a, b) => {
@@ -719,6 +814,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
   }
 
   function countPlayOnce() {
+    if (!stats) initStatsForCurrentUser();
     if (countedPlayForTrack || !currentTrack) return;
     stats.total_plays += 1;
     countedPlayForTrack = true;
@@ -728,6 +824,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 
   function startSession() { if (sessionStartMs === null) sessionStartMs = Date.now(); }
   function endSession() {
+    if (!stats) initStatsForCurrentUser();
     if (sessionStartMs !== null) {
       stats.listening_ms_total += (Date.now() - sessionStartMs);
       sessionStartMs = null;
@@ -752,32 +849,23 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 
   window.setCurrentTrack = function setCurrentTrack(track) {
     if (!track || !track.id) return;
-    if (audio && !audio.paused) {
-      // return;
-    }
     endSession();
     currentTrack = track;
     countedPlayForTrack = false;
   };
-  if (window.fsCurrentTrack) window.setCurrentTrack(window.fsCurrentTrack);
 
-  document.querySelectorAll('.emoji-chip[data-emoji]').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      const mood = e.currentTarget.getAttribute('data-emoji');
-      if (!stats.mood_counts[mood]) stats.mood_counts[mood] = 0;
-      stats.mood_counts[mood] += 1;
-      saveStats(stats);
-      window.renderProfileStats();
-    });
+  // Re-inicializa stats cuando cambia / llega el usuario
+  document.addEventListener('feel:user-ready', initStatsForCurrentUser);
+  document.addEventListener('feel:session-switched', () => {
+    initStatsForCurrentUser();
+    try { document.getElementById('pf-recent-list')?.replaceChildren(); } catch {}
   });
 
-  window.fsFavMock = {
-    add()   { stats.favorites_count = (stats.favorites_count||0) + 1; saveStats(stats); window.renderProfileStats(); },
-    remove(){ stats.favorites_count = Math.max(0, (stats.favorites_count||0)-1); saveStats(stats); window.renderProfileStats(); }
-  };
-
-  window.renderProfileStats();
+  // Arranque
+  initStatsForCurrentUser();
 })();
+
+
 
 
 // --- Hook de mensajes backend ---
@@ -1256,6 +1344,49 @@ document.addEventListener('feel:session-switched', () => {
   try { window._currentPlTracks = []; } catch {}
   try { window._editingPlaylistId = null; } catch {}
 });
+
+// ============== LOGOUT CONTROLADO ==============
+(function () {
+  const API_ORIGIN =
+    (window.API && window.API.origin) ||
+    (window.FEEL?.env?.API_BASE?.replace(/\/api(?:\/v1)?\/?$/,"")) ||
+    "http://127.0.0.1:8000";
+
+  async function doLogout() {
+    try {
+      await fetch(`${API_ORIGIN}/accounts/logout/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+    } catch {}
+
+    // Limpia TODO rastro local del usuario
+    try { localStorage.removeItem('fs_user_cache_v1'); } catch {}
+    try { localStorage.removeItem('fs_user_email'); localStorage.removeItem('fs_user_id'); } catch {}
+    try { localStorage.removeItem('fs_owner_id_v3'); } catch {}
+    try { sessionStorage.clear(); } catch {}
+    try { wipeUserState(); } catch {}
+
+    // Señal interna para que otras vistas se “vacíen”
+    try { __lastUserId = null; UserStore.set(null); } catch {}
+    broadcastSessionSwitch(null, null);
+
+    // Redirige con replace para que el back no regrese al dashboard
+    const loginUrl = (window.FEEL?.env?.FRONTEND_BASE_URL || "http://127.0.0.1:5500")
+      .replace(/\/+$/,"") + "/pages/login.html";
+    location.replace(loginUrl);
+  }
+
+  // Soporta <button id="btn-logout"> y <a data-logout>
+  document.getElementById('btn-logout')?.addEventListener('click', (e) => {
+    e.preventDefault(); doLogout();
+  });
+  document.querySelectorAll('[data-logout]').forEach(a=>{
+    a.addEventListener('click', (e)=>{ e.preventDefault(); doLogout(); });
+  });
+})();
+
 
 
 })();

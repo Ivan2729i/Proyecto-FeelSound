@@ -479,19 +479,27 @@
   // ======= Favoritos (máx 5) =======
     const $favList  = document.getElementById('fav-pl-list');
     const $favEmpty = document.getElementById('fav-pl-empty');
-    const FAV_KEY   = 'fs.favoritePlaylists'; // [{id, nombre, descripcion}]
+
+    // Clave por USUARIO
+    function getFavKey() {
+      const email = localStorage.getItem('fs_user_email') || '';
+      const uid   = localStorage.getItem('fs_user_id')    || '';
+      const tag   = email || uid || 'guest';
+      return `userFav.v1::${tag}`;
+    }
 
     // Carga/guarda
     function favLoad(){
+      const key = getFavKey();
       try {
-        const raw = localStorage.getItem(FAV_KEY);
+        const raw = localStorage.getItem(key);
         const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-        // sanea
         return arr.filter(x => x && Number.isFinite(+x.id)).slice(0,5);
       } catch { return []; }
     }
     function favSave(arr){
-      localStorage.setItem(FAV_KEY, JSON.stringify((arr||[]).slice(0,5)));
+      const key = getFavKey();
+      localStorage.setItem(key, JSON.stringify((arr||[]).slice(0,5)));
     }
     function favIs(id){
       return favLoad().some(x => +x.id === +id);
@@ -510,6 +518,31 @@
     }
     function favToggle(pl){
       return favIs(pl.id) ? (favRemove(pl.id), false) : (favAddTop(pl), true);
+    }
+
+    function favReconcileWith(items){
+      try {
+        const byId = new Map(items.map(p => [+p.id, p]));
+        const prev = favLoad();
+        const next = [];
+        let changed = false;
+
+        for (const f of prev){
+          const pl = byId.get(+f.id);
+          if (!pl) { changed = true; continue; }
+          const nNombre = pl.nombre || 'Playlist';
+          const nDesc   = (pl.descripcion || '').trim();
+          if ((f.nombre || '') !== nNombre || (f.descripcion || '').trim() !== nDesc){
+            changed = true;
+          }
+          next.push({ id:+pl.id, nombre: nNombre, descripcion: nDesc });
+        }
+
+        if (changed){
+          favSave(next);
+          renderFavSidebar();
+        }
+      } catch {}
     }
 
     // Render sidebar
@@ -555,12 +588,13 @@
           renderModalTracks(hydrated);
           fitModalScroll();
         }
-      }catch(err){
-        console.warn('[FavSidebar] detalle playlist:', err);
-        if ($plmList) {
-          $plmList.innerHTML = `<div class="py-4 px-6 text-red-300">No se pudieron cargar las canciones.</div>`;
+      } catch (err) {
+          console.warn('[FavSidebar] detalle playlist:', err);
+          try { favRemove(+id); renderFavSidebar(); } catch {}
+          if ($plmList) {
+            $plmList.innerHTML = `<div class="py-4 px-6 text-red-300">Esta playlist ya no existe. La quité de tus favoritas.</div>`;
+          }
         }
-      }
     }
 
     // Delegación de clicks en el sidebar
@@ -573,7 +607,9 @@
 
     // Pinta al cargar
     renderFavSidebar();
-
+    // Repintar al hidratar usuario y al cambiar de sesión
+    document.addEventListener('feel:user-ready', () => renderFavSidebar());
+    document.addEventListener('feel:session-switched', () => renderFavSidebar());
 
 
   // ---------- Tarjetas ----------
@@ -755,6 +791,7 @@
 
     try {
       const items = await fetchPlaylists();
+      favReconcileWith(items);
       $grid.innerHTML = '';
       if (!items.length) { showEmpty(true); fitScrollHeight(); return; }
       showEmpty(false);
