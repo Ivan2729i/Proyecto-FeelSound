@@ -668,8 +668,41 @@
       });
 
       // ================== Acciones extra ==================
-      node.querySelector('.pl-share')?.addEventListener('click', () => {
-        console.log('Compartir (pendiente)');
+      node.querySelector('.pl-share')?.addEventListener('click', async (ev) => {
+          ev.preventDefault();
+          try {
+            const base = API_ORIGIN.replace(/\/+$/,'');
+            const url  = `${base}/api/v1/playlists/${pl.id}/share/copy-link`;
+            const r = await fetch(url, {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                'Accept':'application/json',
+                'X-Requested-With':'XMLHttpRequest',
+                'X-CSRFToken': getCSRF?.() || (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/)?.[2] || '')
+              }
+            });
+            const j = await r.json().catch(()=>null);
+            if (!r.ok || !j?.url) {
+              const msg = (j && (j.detail||j.error)) || `No se pudo generar el enlace.`;
+              throw new Error(msg);
+            }
+
+            // Abre el modal con el link y el TTL recibido
+            if (window.FSShareModal?.open) {
+              window.FSShareModal.open({
+                url: j.url,
+                ttl_days: j.ttl_days ?? 3,
+                expires_at: j.expires_at ?? null
+              });
+            } else {
+              // Fallback mínimo si el modal no existe
+              await navigator.clipboard.writeText(j.url);
+              flash?.('success','Enlace copiado en el portapapeles');
+            }
+          } catch(e){
+            flash?.('error', e.message || 'No se pudo generar el enlace');
+          }
       });
 
       // Eliminar → confirmar en modal
@@ -962,5 +995,202 @@
       }
     });
 
+
+    // ====== MODAL: Importar playlist ======
+    (function(){
+      const $m    = document.getElementById('pl-import-modal');
+      const $open = document.getElementById('pl-import-open');
+      const $inp  = document.getElementById('pl-import-input');
+      const $pv   = document.getElementById('pl-import-preview');
+      const $ok   = document.getElementById('pl-import-continue');
+      const $cc   = document.getElementById('pl-import-cancel');
+
+      if (!$m || !$open) return;
+
+      function openM(){ $m.classList.remove('hidden'); $inp.value=''; $pv.classList.add('hidden'); $pv.innerHTML=''; $inp.focus(); }
+      function closeM(){ $m.classList.add('hidden'); }
+
+      function extractToken(s){
+        s = (s||'').trim();
+        if (!s) return '';
+        try {
+          const u = new URL(s);
+          return u.searchParams.get('token') || '';
+        } catch{
+          // no es URL: asumir que pegó el token puro
+          return s;
+        }
+      }
+
+      async function doPreview(token){
+        const base = API_ORIGIN.replace(/\/+$/,'');
+        const url  = `${base}/api/v1/share/copy/preview?token=${encodeURIComponent(token)}`;
+        const r = await fetch(url, { headers: { 'Accept':'application/json' } });
+        const j = await r.json().catch(()=>null);
+        if (!r.ok || !j?.token_ok){
+          throw new Error((j && (j.detail||j.error)) || 'Token inválido o expirado');
+        }
+        // pinta preview
+        const mins = Math.round((j.duration_ms||0)/60000);
+        const covers = (j.covers||[]).slice(0,4).map(c=>`<img src="${c}" class="w-10 h-10 rounded object-cover bg-white/10">`).join('');
+        $pv.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="flex -space-x-2">${covers || ''}</div>
+            <div>
+              <div class="font-semibold">${j.name}</div>
+              <div class="text-white/70 text-xs">${j.tracks_count||0} canciones • ${mins} min aprox</div>
+            </div>
+          </div>
+        `;
+        $pv.classList.remove('hidden');
+      }
+
+      $open.addEventListener('click', (e)=>{ e.preventDefault(); openM(); });
+
+      // Al cambiar el input, intenta mostrar preview
+      let tPrev = null;
+      $inp?.addEventListener('input', ()=>{
+        clearTimeout(tPrev);
+        $pv.classList.add('hidden'); $pv.innerHTML='';
+        const raw = $inp.value;
+        tPrev = setTimeout(async ()=>{
+          const token = extractToken(raw);
+          if (!token) return;
+          try { await doPreview(token); }
+          catch(e){ }
+        }, 300);
+      });
+
+      $cc?.addEventListener('click', (e)=>{ e.preventDefault(); closeM(); });
+
+      $ok?.addEventListener('click', async ()=>{
+        try{
+          const token = extractToken($inp.value);
+          if (!token) { flash('error','Pega el enlace o token.'); return; }
+          const base = API_ORIGIN.replace(/\/+$/,'');
+          const url  = `${base}/api/v1/share/copy/import`;
+          const r = await fetch(url, {
+            method:'POST',
+            credentials:'include',
+            headers: {
+              'Content-Type':'application/json',
+              'Accept':'application/json',
+              'X-Requested-With':'XMLHttpRequest',
+              'X-CSRFToken': (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/)?.[2] || '')
+            },
+            body: JSON.stringify({ token })
+          });
+          const j = await r.json().catch(()=>null);
+          if (!r.ok || !j?.ok){
+            throw new Error((j && (j.detail||j.error)) || 'No se pudo importar la playlist');
+          }
+          flash('success', `Importada: ${j.name}`);
+          closeM();
+          // refresca vista de playlists
+          location.hash = '#/playlists';
+          try { document.dispatchEvent(new CustomEvent('feelsound:refresh-playlists')); } catch {}
+        } catch(e){
+          flash('error', e.message || 'Error al importar');
+        }
+      });
+    })();
+
+    // ====== Modal Compartir ======
+    (function () {
+      const $m   = document.getElementById('pl-share-modal');
+      const $url = document.getElementById('pl-share-url');
+      const $exp = document.getElementById('pl-share-exp');
+      const $cp  = document.getElementById('pl-share-copy');
+      const $cl  = document.getElementById('pl-share-close');
+
+      if (!$m || !$url || !$exp || !$cp || !$cl) return;
+
+      function ensureModalOnBodyTop(modalEl, panelSelector='[data-modal-panel]', z=2147483647){
+        if (!modalEl) return;
+        if (modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
+        Object.assign(modalEl.style, {
+          position: 'fixed',
+          inset: '0',
+          display: 'grid',
+          placeItems: 'center',
+          pointerEvents: 'auto',
+          zIndex: String(z),
+          background: 'rgba(0,0,0,.60)',
+          backdropFilter: 'blur(6px)'
+        });
+        const panel = modalEl.querySelector(panelSelector) || modalEl.firstElementChild;
+        if (panel) {
+          Object.assign(panel.style, {
+            position: 'relative',
+            zIndex: '1',
+            width: 'min(560px, 92vw)',
+            maxWidth: '92vw',
+            borderRadius: '16px',
+            background: '#0b1630',
+            color: '#fff',
+            boxShadow: '0 20px 60px rgba(0,0,0,.45)'
+          });
+        }
+      }
+
+      function openShareModal({ url, ttl_days=3, expires_at=null }) {
+        ensureModalOnBodyTop($m);
+        $url.value = url || '';
+
+        const days = Number.isFinite(+ttl_days) ? +ttl_days : 3;
+        $exp.textContent = `Vence en ${days} ${days === 1 ? 'día' : 'días'}`;
+
+        $m.classList.remove('hidden');
+        $m.style.display = 'grid';
+        document.body.style.overflow = 'hidden';
+
+        try { $url.focus(); $url.select(); } catch {}
+      }
+
+      function closeShareModal() {
+        $m.classList.add('hidden');
+        $m.style.display = '';
+        document.body.style.overflow = '';
+      }
+
+      // Helpers de flash consistentes
+      function flashSuccess(msg){
+        if (typeof flash === 'function') return flash('success', msg);
+        if (window.Flash?.success) return window.Flash.success(msg);
+        console.log('[success]', msg);
+      }
+      function flashInfo(msg){
+        if (typeof flash === 'function') return flash('info', msg);
+        if (window.Flash?.info) return window.Flash.info(msg);
+        console.log('[info]', msg);
+      }
+      function flashError(msg){
+        if (typeof flash === 'function') return flash('error', msg);
+        if (window.Flash?.error) return window.Flash.error(msg);
+        console.error('[error]', msg);
+      }
+
+      // Copiar
+      $cp.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          await navigator.clipboard.writeText($url.value);
+          flashSuccess('Enlace copiado en el portapapeles');
+          // UX: cierra el modal para que el toast quede claro
+          closeShareModal();
+
+        } catch {
+          // Fallback: selecciona texto y avisa
+          try { $url.select(); } catch {}
+          flashInfo('Seleccioné el enlace; presiona Ctrl+C');
+        }
+      });
+
+      $cl.addEventListener('click', (e)=>{ e.preventDefault(); closeShareModal(); });
+      // Cerrar al hacer click en el fondo (no en el panel)
+      $m.addEventListener('click', (e)=>{ if (e.target === $m) closeShareModal(); });
+      // API pública
+      window.FSShareModal = { open: openShareModal, close: closeShareModal };
+    })();
 
 })();

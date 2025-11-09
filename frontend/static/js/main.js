@@ -67,9 +67,22 @@ function renderHeaderUser(u) {
 let __lastUserId = undefined;
 let __bootFetched = false;
 
+// --- Limpieza fuerte y broadcast de cambio de sesión ---
+function broadcastSessionSwitch(prevOwner, curOwner){
+  try {
+    // Cerrar modales, limpiar layout, etc.
+    try { document.getElementById('pl-modal')?.classList.add('hidden'); } catch {}
+    document.body.style.overflow = '';
+
+    // Señal global
+    document.dispatchEvent(new CustomEvent('feel:session-switched', {
+      detail: { prev: prevOwner, curr: curOwner }
+    }));
+  } catch {}
+}
+
 async function hydrateUser({ force = false } = {}) {
   const CKEY = 'fs_user_cache_v1';
-
   if (!__bootFetched) { force = true; __bootFetched = true; }
 
   const cachedObj = JSON.parse(localStorage.getItem(CKEY) || 'null');
@@ -90,17 +103,18 @@ async function hydrateUser({ force = false } = {}) {
 
   if (force || !fresh) {
     try {
-      const data = await window.apiFetchV1('/me', { cache: 'no-store' });
+      const data = await window.apiFetchV1('/me', { cache: 'no-store' }); // <- no-store
 
-      // Detecta cambio de usuario entre sesiones
       const prevOwner = localStorage.getItem(OWNER_KEY);
       const curOwner  = (data?.id != null) ? String(data.id) : null;
+
       if (prevOwner && curOwner && prevOwner !== curOwner) {
+        // usuario cambió: limpiar y avisar
         wipeUserState();
+        broadcastSessionSwitch(prevOwner, curOwner);
       }
       if (curOwner) localStorage.setItem(OWNER_KEY, curOwner);
 
-      // Actualiza caché y globals
       localStorage.setItem(CKEY, JSON.stringify({ ts: Date.now(), data }));
       if (data?.email) localStorage.setItem('fs_user_email', data.email);
       if (data?.id)    localStorage.setItem('fs_user_id', String(data.id));
@@ -137,6 +151,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
 UserStore.subscribe(renderHeaderUser);
 
+// --- Forzar cache:'no-store' en TODAS las llamadas apiFetchV1 por defecto ---
+(function hardenApiFetchV1(){
+  function wrap(){
+    if (typeof window.apiFetchV1 !== 'function' || window.apiFetchV1.__wrapped) return;
+    const orig = window.apiFetchV1;
+    const fn = (path, opts = {}) => {
+      return orig(path, { cache: 'no-store', ...opts });
+    };
+    fn.__wrapped = true;
+    window.apiFetchV1 = fn;
+  }
+  // Intenta ahora y reintenta cuando la app queda lista
+  wrap();
+  window.addEventListener('load', wrap);
+  document.addEventListener('feel:user-ready', wrap);
+})();
 
 
 
@@ -217,24 +247,28 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     const extraTop = 112;
     const main = document.getElementById('fs-content');
     const panel = document.getElementById('fs-songs-scroll');
-    if(main) main.style.height = `calc(100dvh - ${hHeader}px - ${hPlayer}px)`;
-    if(panel) panel.style.height = `calc(100dvh - ${hHeader}px - ${hPlayer}px - ${extraTop}px)`;
+     const vh = window.innerHeight || document.documentElement.clientHeight;
+
+    if (main)  main.style.height  = (vh - hHeader - hPlayer) + 'px';
+    if (panel) panel.style.height = (vh - hHeader - hPlayer - extraTop) + 'px';
+
     document.documentElement.style.setProperty('--fs-player-h', `${hPlayer}px`);
   }
   window.addEventListener('load', setHeights);
   window.addEventListener('resize', setHeights);
 })();
 
+
 // ===== Router simple por hash (dashboard/perfil) =====
 (function () {
   const $viewDashboard = document.getElementById('view-dashboard');
   const $viewProfile   = document.getElementById('view-profile');
   const $viewPL        = document.getElementById('view-playlists');
-  const $viewCreate = document.getElementById('view-pl-create');
+  const $viewCreate    = document.getElementById('view-pl-create');
   const $navDash       = document.querySelector('a[href="#/dashboard"]');
   const $navPerfil     = document.querySelector('a[href="#/perfil"]');
-  const $navPL      = document.querySelector('a[href="#/playlists"]');
-  const $navCreate  = document.querySelector('a[href="#/playlist/new"]');
+  const $navPL         = document.querySelector('a[href="#/playlists"]');
+  const $navCreate     = document.querySelector('a[href="#/playlist/new"]');
 
   const LS_KEY = getStatsKey();
 
@@ -447,7 +481,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
             ...(newBio  !== curBio             ? { bio: newBio }       : {}),
           };
 
-          await window.apiFetchV1('/me', {
+        await window.apiFetchV1('/me', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(patchObj),
@@ -572,34 +606,50 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     navEl.classList.toggle('text-white', isActive);
     navEl.classList.toggle('text-white/80', !isActive);
   }
-  function showView(view) {
-      const isProfile   = view === 'perfil';
-      const isDashboard = view === 'dashboard';
-      const isPlaylists = view === 'playlists';
-      const isCreate   = view === 'pl-create';
 
-      if ($viewDashboard) $viewDashboard.hidden = !isDashboard;
-      if ($viewProfile)   $viewProfile.hidden   = !isProfile;
-      if ($viewPL)        $viewPL.hidden        = !isPlaylists;
-      if ($viewCreate)   $viewCreate.hidden   = !isCreate;
+  // ⬇️ Cambiado a async y ahora espera al usuario fresco antes de pintar
+  async function showView(view) {
+    await hydrateUser({ force: true }); // <- crítico para que no “herede” datos del usuario previo
 
-      setActive($navDash,   isDashboard);
-      setActive($navPerfil, isProfile);
-      setActive($navPL,     isPlaylists);
-      setActive($navCreate, isCreate);
+    const isProfile   = view === 'perfil';
+    const isDashboard = view === 'dashboard';
+    const isPlaylists = view === 'playlists';
+    const isCreate    = view === 'pl-create';
 
-      if (isProfile) { ensureProfileBootstrapped(); renderProfile(); }
+    if ($viewDashboard) $viewDashboard.hidden = !isDashboard;
+    if ($viewProfile)   $viewProfile.hidden   = !isProfile;
+    if ($viewPL)        $viewPL.hidden        = !isPlaylists;
+    if ($viewCreate)    $viewCreate.hidden    = !isCreate;
+
+    setActive($navDash,   isDashboard);
+    setActive($navPerfil, isProfile);
+    setActive($navPL,     isPlaylists);
+    setActive($navCreate, isCreate);
+
+    if (isProfile) { await ensureProfileBootstrapped(); renderProfile(); }
+
+    // Notificar a otras vistas/componentes que cambió la vista
+    document.dispatchEvent(new CustomEvent('feel:view-changed', { detail: { view } }));
   }
-  function routeFromHash() {
-      const h = (location.hash || '').toLowerCase();
-      if (h.startsWith('#/perfil'))     return showView('perfil');
-      if (h.startsWith('#/playlists'))  return showView('playlists');
-      if (h.startsWith('#/playlist/new')) return showView('pl-create');
-      return showView('dashboard');
+
+  async function routeFromHash() {
+    const h = (location.hash || '').toLowerCase();
+    if (h.startsWith('#/perfil'))        return showView('perfil');
+    if (h.startsWith('#/playlists'))     return showView('playlists');
+    if (h.startsWith('#/playlist/new'))  return showView('pl-create');
+    return showView('dashboard');
   }
-  window.addEventListener('hashchange', routeFromHash);
+
+  window.addEventListener('hashchange', () => { routeFromHash(); });
   routeFromHash();
+
+  // 🔔 Si la sesión cambia (logout/login con otro usuario), forzamos navegación limpia y repintado
+  document.addEventListener('feel:session-switched', async () => {
+    location.hash = '#/dashboard';
+    await routeFromHash();
+  });
 })();
+
 
 // ======== Stats (player, emociones, favoritos) ========
 (function () {
@@ -1187,5 +1237,26 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (e) {
     console.error("LOGIN BOOT ERROR", e);
   }
+
+
+// --- Limpieza visual al cambiar de sesión (cierre de modales y contenedores) ---
+document.addEventListener('feel:session-switched', () => {
+  // Cierra modales conocidos
+  ['pl-modal','pl-del-modal','pf-edit-modal','pl-share-modal','pl-import-modal'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  document.body.style.overflow = '';
+
+  // Limpia contenedores que puedan tener datos del usuario anterior
+  try { document.getElementById('pl-grid')?.replaceChildren(); } catch {}
+  try { document.getElementById('pf-recent-list')?.replaceChildren(); } catch {}
+
+  // Resetea referencias transitorias (si las usas en otros módulos)
+  try { window._currentPlTracks = []; } catch {}
+  try { window._editingPlaylistId = null; } catch {}
+});
+
+
 })();
 
