@@ -16,6 +16,9 @@ from django.http import HttpResponseRedirect
 from django.db import models
 from django.views.decorators.http import require_http_methods
 from django.utils.timezone import localtime
+from django.core.cache import cache
+from .utils_share import generate_share_token, verify_share_token, ShareTokenError
+import time
 
 
 
@@ -697,5 +700,173 @@ def playlist_detail(request, pid: int):
     })
 
 # --- FIN: API PLAYLISTS ---
+
+
+# --- INICIO: COMPARTIR PLAYLISTS ---
+
+def _rate_limit(request, key_prefix: str, limit: int = 15, window: int = 60):
+    ip = request.META.get("REMOTE_ADDR") or "unknown"
+    key = f"rl:{key_prefix}:{ip}"
+    cur = cache.get(key) or 0
+    if cur >= limit:
+        return JsonResponse({"detail": "Too many requests"}, status=429)
+    # inicia ventana si no existe
+    if cur == 0:
+        cache.set(key, 1, timeout=window)
+    else:
+        cache.incr(key)
+    return None
+
+
+def _resolve_copy_name(user, base_name: str) -> str:
+    base = base_name.strip()
+    if not Playlist.objects.filter(usuario=user, nombre=base).exists():
+        return base
+    # primera colisión → "(copia)"
+    name = f"{base} (copia)"
+    if not Playlist.objects.filter(usuario=user, nombre=name).exists():
+        return name
+    # siguientes → "(copia N)"
+    n = 2
+    while True:
+        name_n = f"{base} (copia {n})"
+        if not Playlist.objects.filter(usuario=user, nombre=name_n).exists():
+            return name_n
+        n += 1
+
+
+@login_required
+@require_POST
+def share_copy_link(request, pid: int):
+    hit = _rate_limit(request, "share_link", limit=15, window=60)
+    if hit:
+        return hit
+
+    pl = get_object_or_404(Playlist, id=pid, usuario=request.user)
+
+    token = generate_share_token(pl.id)
+
+    # arma URL de preview (si luego quieres que sea tu frontend, cambia el path)
+    url = f"{request.scheme}://{request.get_host()}/api/v1/share/copy/preview?token={token}"
+
+    # TTL (días) y caducidad en unix
+    ttl_days   = getattr(settings, "SHARE_TTL_DAYS", 3)
+    expires_at = int(time.time() + ttl_days * 86400)
+
+    return JsonResponse({
+        "url": url,
+        "token": token,
+        "ttl_days": ttl_days,
+        "expires_at": expires_at,
+    }, status=200)
+
+
+@require_GET
+def share_copy_preview(request):
+    # rate-limit
+    hit = _rate_limit(request, "share_preview", limit=15, window=60)
+    if hit: return hit
+
+    token = (request.GET.get("token") or "").strip()
+    if not token:
+        return JsonResponse({"detail": "token requerido"}, status=400)
+    try:
+        payload = verify_share_token(token)
+    except ShareTokenError as e:
+        return JsonResponse({"detail": str(e)}, status=400)
+
+    pid = int(payload["pid"])
+    pl = Playlist.objects.filter(id=pid).first()
+    if not pl:
+        return JsonResponse({"detail": "playlist_not_found"}, status=404)
+
+    # compón preview SIN datos del dueño
+    pcs = (PlaylistCancion.objects
+           .filter(playlist=pl)
+           .select_related("cancion__album")
+           .order_by("posicion", "id"))
+    covers, total_ms = [], 0
+    for pc in pcs:
+        c = pc.cancion
+        if len(covers) < 4:
+            cover = getattr(getattr(c, "album", None), "portada_url", "") or ""
+            if cover: covers.append(cover)
+        total_ms += int(c.duracion or 0) * 1000
+
+    return JsonResponse({
+        "token_ok": True,
+        "name": pl.nombre,
+        "tracks_count": pcs.count(),
+        "duration_ms": total_ms,
+        "covers": covers,
+        "expires_at": payload["exp"],  # unix ts
+    })
+
+@login_required
+@require_POST
+def share_copy_import(request):
+    # rate-limit
+    hit = _rate_limit(request, "share_import", limit=15, window=60)
+    if hit: return hit
+
+    data = json.loads(request.body or "{}")
+    token = (data.get("token") or "").strip()
+    if not token:
+        return JsonResponse({"detail": "token requerido"}, status=400)
+
+    try:
+        payload = verify_share_token(token)
+    except ShareTokenError as e:
+        return JsonResponse({"detail": str(e)}, status=400)
+
+    src = Playlist.objects.filter(id=int(payload["pid"])).first()
+    if not src:
+        return JsonResponse({"detail": "playlist_not_found"}, status=404)
+
+    # nombre destino resuelto
+    final_name = _resolve_copy_name(request.user, src.nombre)
+    # crea destino (privada por defecto)
+    dest = Playlist.objects.create(
+        nombre=final_name,
+        descripcion=src.descripcion or "",
+        es_publica=False,
+        usuario=request.user,
+    )
+
+    # duplica canciones preservando posición
+    pcs = (PlaylistCancion.objects
+           .filter(playlist=src)
+           .select_related("cancion")
+           .order_by("posicion", "id"))
+
+    bulk = []
+    for pc in pcs:
+        c = pc.cancion
+        # si por alguna razón no está la canción, recupérala por deezer_id
+        if not isinstance(c.id, int) or not c:
+            # muy improbable; por si acaso
+            if c and c.deezer_id:
+                c = ensure_cancion_from_deezer_id(int(c.deezer_id))
+            else:
+                # si no hay deezer_id, salta ese ítem
+                continue
+        bulk.append(PlaylistCancion(playlist=dest, cancion=c, posicion=pc.posicion))
+
+    if bulk:
+        PlaylistCancion.objects.bulk_create(bulk, ignore_conflicts=True)
+
+    # calcula duración
+    total_ms = ( PlaylistCancion.objects
+                .filter(playlist=dest)
+                .aggregate(s=models.Sum('cancion__duracion'))['s'] or 0
+    ) * 1000
+
+    return JsonResponse({
+        "ok": True,
+        "new_id": dest.id,
+        "name": dest.nombre,
+        "track_count": len(bulk),
+        "duration_ms": total_ms
+    }, status=201)
 
 

@@ -90,6 +90,9 @@
     <aside id="fs-sidebar"
       class="fixed top-16 left-0 h-[calc(100dvh-4rem)] w-72 bg-[#0B1E5B]/90 border-r border-white/10
              -translate-x-full transition-transform md:translate-x-0 md:static md:h-[calc(100vh-4rem)] md:w-64">
+      <button id="pl-import-open" class="w-full mt-2 px-3 py-2 rounded-lg bg-white/10 text-white/80 hover:bg-white/20">
+        Importar playlist…
+      </button>
       <nav class="h-full overflow-y-auto no-scrollbar p-4 space-y-6">
         <div class="space-y-1">
           <a href="#/dashboard" class="fs-navitem group flex items-center gap-3 px-3 py-2 rounded-lg text-white bg-white/15 hover:bg-white/20">
@@ -485,6 +488,47 @@
           <div class="px-6 py-4 border-t border-white/10 flex items-center gap-3">
             <button id="fs-atp-cancel" class="btn-fs !bg-white/10 hover:!bg-white/15 !text-white/90">Cancelar</button>
             <button id="fs-atp-ok" class="ml-auto btn-fs btn-fs--hover-purple">Hecho</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- === MODAL: Importar Playlist === -->
+      <div id="pl-import-modal" class="hidden fixed inset-0 grid place-items-center bg-black/60 backdrop-blur-sm z-[2147483647]">
+        <div class="w-[min(560px,92vw)] rounded-2xl bg-[#0b1630] text-white p-4" data-modal-panel>
+          <h3 class="text-lg font-bold mb-2">Importar playlist</h3>
+          <p class="text-white/70 text-sm mb-3">Pega el enlace que te compartieron de la Playlist compartida.</p>
+          <input id="pl-import-input" class="w-full rounded-lg bg-white/10 p-2 mb-3" placeholder="https://...token=xxx o sólo el token">
+          <div id="pl-import-preview" class="hidden mb-3 p-3 rounded-lg bg-white/5 text-sm"></div>
+          <div class="flex gap-2 justify-end">
+            <button id="pl-import-cancel" class="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20">Cancelar</button>
+            <button id="pl-import-continue" class="px-3 py-2 rounded-lg btn-fs btn-fs--hover-purple">Importar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- === MODAL: Compartir playlist === -->
+      <div id="pl-share-modal"
+           class="hidden fixed inset-0 grid place-items-center bg-black/60 backdrop-blur-sm z-[2147483647]">
+        <div data-modal-panel
+             class="w-[min(560px,92vw)] rounded-2xl bg-[#0b1630] text-white p-4">
+          <h3 class="text-lg font-bold mb-2">Compartir playlist</h3>
+          <p id="pl-share-exp" class="text-white/70 text-sm mb-3">Vence en —</p>
+          <!-- URL a lo largo -->
+          <div class="mb-4">
+            <input id="pl-share-url"
+                   class="w-full rounded-lg bg-white/10 p-2 text-sm font-mono text-white/90 select-all"
+                   readonly value="">
+          </div>
+          <!-- Footer: Cerrar (izq) | Copiar (der) -->
+          <div class="flex items-center justify-between gap-2">
+            <button id="pl-share-close"
+                    class="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20">
+              Cerrar
+            </button>
+            <button id="pl-share-copy"
+                    class="px-3 py-2 rounded-lg btn-fs btn-fs--hover-purple">
+              Copiar enlace
+            </button>
           </div>
         </div>
       </div>

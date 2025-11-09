@@ -226,7 +226,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-# === CSRF (autoriza ese origen a recibir/enviar csrftoken) ===
+# === CSRF  ===
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5500",
     "http://127.0.0.1:5500",
@@ -249,6 +249,11 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
 }
+
+
+# Conf Compartir
+SHARE_SECRET = os.environ.get("FEELSOUND_SHARE_SECRET", "cambia-esto-en-produccion")
+SHARE_TTL_DAYS = int(os.environ.get("FEELSOUND_SHARE_TTL_DAYS", "3"))
 
 
 # Default primary key field type
