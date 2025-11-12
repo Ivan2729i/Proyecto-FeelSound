@@ -11,12 +11,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-SECRET_KEY = config('SECRET_KEY')
+DJANGO_DEBUG=falseSECRET_KEY = config("DJANGO_SECRET_KEY", default=config("SECRET_KEY", default="dev-key"))
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="*.ondigitalocean.app").split(",") if h.strip()]
 
 
 # Application definition
@@ -38,8 +37,10 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'api',
-    'debug_toolbar',
 ]
+
+if DEBUG:
+    INSTALLED_APPS += ['debug_toolbar']
 
 SITE_ID = None
 
@@ -55,8 +56,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.contrib.sites.middleware.CurrentSiteMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
 ]
+
+if DEBUG:
+    MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
 
 MESSAGE_STORAGE = "django.contrib.messages.storage.fallback.FallbackStorage"
 
@@ -97,18 +100,20 @@ WSGI_APPLICATION = 'FeelSound.wsgi.application'
 # Database
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST'),
-        'PORT': config('DB_PORT', cast=int),
-        'OPTIONS': {
-            'charset': 'utf8mb4',
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": config("DB_NAME"),
+        "USER": config("DB_USER"),
+        "PASSWORD": config("DB_PASSWORD"),
+        "HOST": config("DB_HOST"),
+        "PORT": config("DB_PORT", default="25060", cast=int),
+        "OPTIONS": {
+            "charset": "utf8mb4",
+            "ssl": {"ca": "/etc/ssl/certs/ca-certificates.crt"},
         },
     }
 }
+
 
 
 # Password validation
@@ -219,7 +224,7 @@ ACCOUNT_ALLOWED_REDIRECT_DOMAINS = [
     "feelsound.mx",
 ]
 
-# === CORS (permite al front llamar a la API con cookies) ===
+# === CORS  ===
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5500",
     "http://127.0.0.1:5500",
@@ -235,9 +240,8 @@ CSRF_TRUSTED_ORIGINS = [
 # Cookies (en dev, Lax funciona con distintos puertos)
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE    = "Lax"
-# En producción HTTPS activa también en True:
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE    = False
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 
 # Configuración de API REST

@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8
+    container_name: feelsound_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "Ivancito1027."
+      MYSQL_DATABASE: "feelsound"
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  backend:
+    build: ./backend
+    container_name: feelsound_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_HOST: db
+      SITE_ID: "1"
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py shell < init_social.py &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: feelsound_frontend
+    ports:
+      - "5500:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
