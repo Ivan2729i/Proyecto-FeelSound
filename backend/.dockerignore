@@ -1,0 +1,33 @@
+# Cosas pesadas o inútiles en la imagen
+.venv/
+venv/
+env/
+node_modules/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.log
+coverage/
+dist/
+build/
+.eggs/
+*.egg-info/
+
+# Archivos locales
+.env
+.env.*
+*.sqlite3
+
+# Estáticos y media generados localmente
+static/
+staticfiles/
+media/
+uploads/
+
+# IDE
+.vscode/
+.idea/
