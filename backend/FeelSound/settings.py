@@ -11,12 +11,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-DJANGO_DEBUG=falseSECRET_KEY = config("DJANGO_SECRET_KEY", default=config("SECRET_KEY", default="dev-key"))
-
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="*.ondigitalocean.app").split(",") if h.strip()]
+SECRET_KEY = config("DJANGO_SECRET_KEY", default=config("SECRET_KEY", default="dev-key"))
 
+ALLOWED_HOSTS = [
+    *[h.strip() for h in config("ALLOWED_HOSTS", default="*.ondigitalocean.app,localhost,127.0.0.1").split(",") if h.strip()],
+]
+
+APP_DOMAIN = config("APP_DOMAIN", default="feelsoundgit-gvi6t.ondigitalocean.app")
 
 # Application definition
 
@@ -42,7 +45,7 @@ INSTALLED_APPS = [
 if DEBUG:
     INSTALLED_APPS += ['debug_toolbar']
 
-SITE_ID = None
+SITE_ID = 1
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -217,7 +220,7 @@ CACHES = {
 
 
 # ====================== Conexion Front-Back ==========================
-FRONTEND_BASE_URL = config("FRONTEND_BASE_URL", default="http://127.0.0.1:5500")
+FRONTEND_BASE_URL = config("FRONTEND_BASE_URL", default=f"https://{APP_DOMAIN}")
 
 ACCOUNT_ALLOWED_REDIRECT_DOMAINS = [
     "127.0.0.1:5500",
@@ -227,6 +230,7 @@ ACCOUNT_ALLOWED_REDIRECT_DOMAINS = [
 
 # === CORS  ===
 CORS_ALLOWED_ORIGINS = [
+    f"https://{APP_DOMAIN}",
     "http://localhost:5500",
     "http://127.0.0.1:5500",
 ]
@@ -234,15 +238,19 @@ CORS_ALLOW_CREDENTIALS = True
 
 # === CSRF  ===
 CSRF_TRUSTED_ORIGINS = [
+    f"https://{APP_DOMAIN}",
     "http://localhost:5500",
     "http://127.0.0.1:5500",
 ]
 
-# Cookies (en dev, Lax funciona con distintos puertos)
+
+# Cookies
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE    = "Lax"
 SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE    = not DEBUG
+
 
 
 # Configuración de API REST
