@@ -167,11 +167,8 @@ USE_TZ = True
 
 # --- Configuración de Archivos Estáticos ---
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [p for p in [
-    BASE_DIR / 'static',
-    FRONTEND_STATIC_DIR,
-] if p.exists()]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [p for p in [BASE_DIR / 'static'] if p.exists()]
 
 # --- Configuración de mensajes ---
 MESSAGE_TAGS = {
@@ -250,6 +247,21 @@ SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE    = "Lax"
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE    = not DEBUG
+
+
+# Google
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APP": {
+            "client_id": config("GOOGLE_CLIENT_ID", default=""),
+            "secret": config("GOOGLE_CLIENT_SECRET", default=""),
+            "key": "",
+        },
+        "SCOPE": ["email", "profile"],
+        "AUTH_PARAMS": {"access_type": "online"},
+    }
+}
 
 
 
