@@ -431,18 +431,39 @@ document.addEventListener('DOMContentLoaded', () => {
     return true;
   }
 
+  const _capturedOnce = new Set();
+
   async function captureTrackFireAndForget(trackLike) {
       try {
-        const payload = normalizeCapturePayload(trackLike);
-        if (!payload || !payload.id || !payload.title) return;
+        const p = normalizeCapturePayload(trackLike);
+        if (!p || !p.id || !p.title) return;
 
-        // Usa el helper que ya mete cookies y CSRF
+        if (_capturedOnce.has(p.id)) return;
+        _capturedOnce.add(p.id);
+
+        const fd = new FormData();
+        // IDs
+        fd.set('id', String(p.id));
+        fd.set('deezer_id', String(p.id));
+
+        // Títulos/duración
+        fd.set('titulo', p.title || '');
+        fd.set('title',  p.title || '');
+        fd.set('duracion', String(p.duration || 30));
+        fd.set('duration', String(p.duration || 30));
+        fd.set('preview', p.preview || '');
+
+        // Artista / Álbum (nombres planos, no anidados)
+        fd.set('artista', p.artist?.name || '');
+        fd.set('artist',  p.artist?.name || '');
+        fd.set('album',   p.album?.title || '');
+        fd.set('cover',   p.album?.cover || '');
+
         await window.apiFetchRoot(ROUTES.captureTrack, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          body: fd,
           credentials: 'include',
           keepalive: true,
-          body: JSON.stringify(payload),
         });
       } catch (_) {
         // silencioso
