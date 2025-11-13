@@ -275,17 +275,7 @@ CSRF_COOKIE_SECURE    = not DEBUG
 # Google
 ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
 
-SOCIALACCOUNT_PROVIDERS = {
-    "google": {
-        "APP": {
-            "client_id": config("GOOGLE_CLIENT_ID", default=""),
-            "secret": config("GOOGLE_CLIENT_SECRET", default=""),
-            "key": "",
-        },
-        "SCOPE": ["email", "profile"],
-        "AUTH_PARAMS": {"access_type": "online"},
-    }
-}
+
 
 
 
