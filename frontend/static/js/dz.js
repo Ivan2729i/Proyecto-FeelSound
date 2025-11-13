@@ -431,6 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return true;
   }
 
+
   const _capturedOnce = new Set();
 
   async function captureTrackFireAndForget(trackLike) {
@@ -441,32 +442,50 @@ document.addEventListener('DOMContentLoaded', () => {
         if (_capturedOnce.has(p.id)) return;
         _capturedOnce.add(p.id);
 
+        const url = absApi(ROUTES.captureTrack);
+
+        // 1) Intento con JSON (DRF suele preferir esto)
+        const jsonPayload = {
+          id: String(p.id),
+          deezer_id: String(p.id),
+          titulo: p.title || '',
+          title: p.title || '',
+          duracion: Number(p.duration || 30) || 30,
+          duration: Number(p.duration || 30) || 30,
+          preview: p.preview || '',
+          artista: p.artist?.name || '',
+          artist: p.artist?.name || '',
+          album: p.album?.title || '',
+          cover: p.album?.cover || ''
+        };
+
+        try {
+          await window.apiFetchRoot(url, {
+            method: 'POST',
+            body: JSON.stringify(jsonPayload),
+            credentials: 'include',
+            // Content-Type lo pone coreFetch al ver body objeto
+          });
+          return; // OK con JSON
+        } catch (e1) {
+          // Si la respuesta fue 400, reintenta con FormData
+          const status = e1?.res?.status;
+          if (status && status !== 400) return; // otros errores: salir silencioso
+        }
+
+        // 2) Fallback con FormData (para vistas que leen request.POST)
         const fd = new FormData();
-        // IDs
-        fd.set('id', String(p.id));
-        fd.set('deezer_id', String(p.id));
+        Object.entries(jsonPayload).forEach(([k, v]) => fd.set(k, String(v ?? '')));
 
-        // Títulos/duración
-        fd.set('titulo', p.title || '');
-        fd.set('title',  p.title || '');
-        fd.set('duracion', String(p.duration || 30));
-        fd.set('duration', String(p.duration || 30));
-        fd.set('preview', p.preview || '');
-
-        // Artista / Álbum (nombres planos, no anidados)
-        fd.set('artista', p.artist?.name || '');
-        fd.set('artist',  p.artist?.name || '');
-        fd.set('album',   p.album?.title || '');
-        fd.set('cover',   p.album?.cover || '');
-
-        await window.apiFetchRoot(ROUTES.captureTrack, {
+        await window.apiFetchRoot(url, {
           method: 'POST',
           body: fd,
           credentials: 'include',
-          keepalive: true,
+          keepalive: true
+          // ¡no pongas Content-Type manualmente con FormData!
         });
-      } catch (_) {
-        // silencioso
+      } catch {
+        // no-op
       }
   }
 
