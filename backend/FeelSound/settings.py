@@ -49,7 +49,17 @@ INSTALLED_APPS = [
 if DEBUG:
     INSTALLED_APPS += ['debug_toolbar']
 
-SITE_ID = 1
+SITE_ID = int(os.environ.get("DJANGO_SITE_ID", "1"))
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "allauth": {"handlers": ["console"], "level": "DEBUG"},
+        "django.request": {"handlers": ["console"], "level": "ERROR"},
+    },
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
