@@ -1,5 +1,5 @@
 from pathlib import Path
-import os
+import os, tempfile
 from decouple import config
 from django.contrib.messages import constants as messages
 
@@ -105,8 +105,17 @@ TEMPLATES = [
 WSGI_APPLICATION = 'FeelSound.wsgi.application'
 
 
-# Database
+# ---- CA desde env ----
+CA_PEM  = os.environ.get("MYSQL_SSL_CA_PEM")
+CA_PATH = os.environ.get("MYSQL_SSL_CA")
+if CA_PEM and not CA_PATH:
+    tf = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
+    tf.write(CA_PEM.encode("utf-8"))
+    tf.close()
+    CA_PATH = tf.name
 
+
+# ---- Database ----
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
@@ -114,23 +123,14 @@ DATABASES = {
         "USER": config("DB_USER"),
         "PASSWORD": config("DB_PASSWORD"),
         "HOST": config("DB_HOST"),
-        "PORT": config("DB_PORT", default="25060", cast=int),
+        "PORT": int(config("DB_PORT", default="25060")),
+        "CONN_MAX_AGE": 600,
         "OPTIONS": {
             "charset": "utf8mb4",
-            "ssl": {"ca": "/etc/ssl/certs/ca-certificates.crt"},
+            "ssl": {"ca": CA_PATH or "/etc/ssl/certs/ca-certificates.crt"},
         },
     }
 }
-
-if DATABASES["default"]["ENGINE"] == "django.db.backends.mysql":
-    DATABASES["default"].setdefault("OPTIONS", {})
-    DATABASES["default"]["OPTIONS"]["ssl"] = {
-        "ca": os.environ.get(
-            "MYSQL_SSL_CA",
-            "/etc/ssl/certs/ca-certificates.crt"
-        )
-    }
-    DATABASES["default"]["CONN_MAX_AGE"] = 600
 
 
 
