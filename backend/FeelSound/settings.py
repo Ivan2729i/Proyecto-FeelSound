@@ -122,6 +122,16 @@ DATABASES = {
     }
 }
 
+if DATABASES["default"]["ENGINE"] == "django.db.backends.mysql":
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"]["ssl"] = {
+        "ca": os.environ.get(
+            "MYSQL_SSL_CA",
+            "/etc/ssl/certs/ca-certificates.crt"
+        )
+    }
+    DATABASES["default"]["CONN_MAX_AGE"] = 600
+
 
 
 # Password validation
