@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     deezerTrack:  (id) => `/api/deezer/track/${id}/`,
     songsByEmotion: (emocion, limit = 25) =>
       `/api/songs?emocion=${encodeURIComponent(emocion)}&limit=${limit}`,
-    trackEmotions: (id) => `/api/v1/tracks/${id}/emotions`,
+    trackEmotions: (id) => `/tracks/${id}/emotions`,
     captureTrack: `/api/capture/deezer-track`,
   };
 
@@ -431,27 +431,24 @@ document.addEventListener('DOMContentLoaded', () => {
     return true;
   }
 
-  function captureTrackFireAndForget(trackLike) {
-    try {
-      const payload = normalizeCapturePayload(trackLike);
-      if (!payload || !payload.id || !payload.title) return;
+  async function captureTrackFireAndForget(trackLike) {
+      try {
+        const payload = normalizeCapturePayload(trackLike);
+        if (!payload || !payload.id || !payload.title) return;
 
-      const url = absApi(ROUTES.captureTrack);
-
-      if (navigator.sendBeacon) {
-        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-        navigator.sendBeacon(url, blob);
-      } else {
-        fetch(url, {
+        // Usa el helper que ya mete cookies y CSRF
+        await window.apiFetchRoot(ROUTES.captureTrack, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          credentials: 'include',
           keepalive: true,
-          credentials: 'include'
-        }).catch(() => {});
+          body: JSON.stringify(payload),
+        });
+      } catch (_) {
+        // silencioso
       }
-    } catch (_) {}
   }
+
 
   // --- Curación del preview para la misma pista
   async function healPreviewFor(index) {
