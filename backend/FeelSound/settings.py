@@ -15,11 +15,15 @@ DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
 SECRET_KEY = config("DJANGO_SECRET_KEY", default=config("SECRET_KEY", default="dev-key"))
 
+APP_DOMAIN = config("APP_DOMAIN", default="feelsoundgit-gvi6t.ondigitalocean.app")
+
 ALLOWED_HOSTS = [
-    *[h.strip() for h in config("ALLOWED_HOSTS", default="*.ondigitalocean.app,localhost,127.0.0.1").split(",") if h.strip()],
+    APP_DOMAIN,
+    ".ondigitalocean.app",
+    "localhost",
+    "127.0.0.1",
 ]
 
-APP_DOMAIN = config("APP_DOMAIN", default="feelsoundgit-gvi6t.ondigitalocean.app")
 
 # Application definition
 
@@ -236,6 +240,7 @@ CORS_ALLOW_CREDENTIALS = True
 # === CSRF  ===
 CSRF_TRUSTED_ORIGINS = [
     f"https://{APP_DOMAIN}",
+    "https://*.ondigitalocean.app",
     "http://localhost:5500",
     "http://127.0.0.1:5500",
 ]
@@ -251,6 +256,7 @@ CSRF_COOKIE_SECURE    = not DEBUG
 
 # Google
 ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
+
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {
