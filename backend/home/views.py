@@ -305,18 +305,21 @@ def capture_deezer_track(request):
     CLASSIFY_ON_CAPTURE = str(getattr(settings, "FEELSOUND_CLASSIFY_ON_CAPTURE", "true")).lower() == "true"
     USE_LYRICS          = str(getattr(settings, "FEELSOUND_USE_LYRICS", "true")).lower() == "true"
 
-    # ---- 1) Leer payload JSON o FormData ----
+    # 1) Parseo robusto del cuerpo (JSON o FormData o text/plain con JSON)
     data = {}
-    ct = (request.META.get("CONTENT_TYPE") or "").lower()
-    if "application/json" in ct:
-        try:
-            data = json.loads((request.body or b"").decode("utf-8") or "{}")
-        except json.JSONDecodeError as e:
-            return JsonResponse({"ok": False, "error": f"JSON inválido: {e}"}, status=400)
-    else:
-        data = request.POST.dict()  # soporta FormData
+    raw = (request.body or b"")
+    ctype = (request.META.get("CONTENT_TYPE") or "").lower()
+    try:
+        if raw:
+            # intenta JSON SIEMPRE; si falla y era form, abajo tomamos POST
+            data = json.loads(raw.decode("utf-8"))
+    except Exception:
+        data = {}
 
-    # helper para tomar claves equivalentes
+    if not isinstance(data, dict) or not data:
+        # fallback a POST (FormData)
+        data = request.POST.dict()
+
     def pick(*keys, default=""):
         for k in keys:
             v = data.get(k)
@@ -326,10 +329,10 @@ def capture_deezer_track(request):
 
     dz_track_id = str(pick("deezer_id", "id")).strip()
     title       = pick("title", "titulo").strip()
-    preview     = pick("preview", "preview_url")
-    artist_name = pick("artist", "artista")
-    album_title = pick("album")
-    cover_url   = pick("cover", "portada", "portada_url")
+    preview     = pick("preview", "preview_url") or ""
+    artist_name = pick("artist", "artista") or ""
+    album_title = pick("album") or ""
+    cover_url   = pick("cover", "portada", "portada_url") or ""
     try:
         duration = int(pick("duration", "duracion", default=30) or 30)
     except (TypeError, ValueError):
@@ -338,15 +341,14 @@ def capture_deezer_track(request):
     if not dz_track_id or not title:
         return JsonResponse({"ok": False, "error": "payload incompleto (id/title)"}, status=400)
 
-    # Campos anidados estilo TU payload original
     artist_obj = data.get("artist") or {}
     album_obj  = data.get("album") or {}
+    artist_dzid = None
+    album_dzid  = None
+
     if isinstance(artist_obj, dict):
         artist_name = artist_name or artist_obj.get("name") or artist_obj.get("title") or ""
         artist_dzid = artist_obj.get("id") or _as_id(artist_obj.get("name"))
-    else:
-        artist_dzid = None
-
     if isinstance(album_obj, dict):
         album_title = album_title or album_obj.get("title") or album_obj.get("name") or "—"
         album_dzid  = album_obj.get("id") or _as_id(album_obj.get("title"))
@@ -355,11 +357,8 @@ def capture_deezer_track(request):
                 cover_url = album_obj["cover"]
             elif isinstance(album_obj.get("title"), dict) and isinstance(album_obj["title"].get("cover"), str):
                 cover_url = album_obj["title"]["cover"]
-    else:
-        album_dzid = None
-        album_title = album_title or "—"
 
-    # ---- 2) Completar con Deezer si faltan cosas (no crítico) ----
+    # 2) Completar con Deezer (no crítico)
     try:
         if not (artist_name and album_title and cover_url):
             t = _dz_get(f"/track/{dz_track_id}") or {}
@@ -371,18 +370,14 @@ def capture_deezer_track(request):
             album_title = (album_title or al.get("title") or "—").strip()
             cover_url   = cover_url or (al.get("cover") or "")
     except Exception:
-        # No bloqueamos captura si Deezer falla
-        pass
+        pass  # sin bloquear
 
-    # Defaults defensivos
     artist_name = artist_name or "—"
     album_title = album_title or "—"
     cover_url   = cover_url or ""
 
-    # ---- 3) Upsert transaccional, pero sin romper ante detalles menores ----
     try:
         with transaction.atomic():
-
             # ARTISTA
             if artist_dzid:
                 artista, _ = Artista.objects.update_or_create(
@@ -390,10 +385,7 @@ def capture_deezer_track(request):
                     defaults={"nombre": artist_name[:255] or "—"}
                 )
             else:
-                artista, _ = Artista.objects.get_or_create(
-                    nombre=(artist_name[:255] or "—")
-                )
-
+                artista, _ = Artista.objects.get_or_create(nombre=(artist_name[:255] or "—"))
             try:
                 _enrich_artist(artista, artist_dzid)
             except Exception:
@@ -414,7 +406,6 @@ def capture_deezer_track(request):
                     artista=artista, titulo=(album_title[:255] or "—"),
                     defaults={"portada_url": cover_url[:500]}
                 )
-
             try:
                 _enrich_album(album, album_dzid)
             except Exception:
@@ -432,7 +423,7 @@ def capture_deezer_track(request):
                 }
             )
 
-            # CLASIFICACIÓN (no crítica)
+            # CLASIFICACIÓN (blanda)
             if CLASSIFY_ON_CAPTURE and not cancion.top_emocion_id:
                 try:
                     texto = f"{title} - {artist_name}".strip()
@@ -444,19 +435,22 @@ def capture_deezer_track(request):
                         if lyrics:
                             texto = f"{texto}\n\n{lyrics}"
 
-                    res = clasificar_6(texto, title=title)
-                    clave, scores = res.get("label"), res.get("scores", {})
+                    from .services_emociones import clasificar_6
+                    res = clasificar_6(texto, title=title) or {}
+                    clave = res.get("label")
+                    scores = res.get("scores", {}) or {}
+
                     if clave:
-                        emo = Emocion.objects.get(clave=clave)
-                        CancionEmocion.objects.update_or_create(
-                            cancion=cancion, emocion=emo, source="goemotions",
-                            defaults={"score": float(scores.get(clave, 0.0))}
-                        )
-                        cancion.top_emocion = emo
-                        cancion.emotion_scores = scores
-                        cancion.save(update_fields=["top_emocion", "emotion_scores"])
+                        emo = Emocion.objects.filter(clave=clave).first()
+                        if emo:
+                            CancionEmocion.objects.update_or_create(
+                                cancion=cancion, emocion=emo, source="goemotions",
+                                defaults={"score": float(scores.get(clave, 0.0))}
+                            )
+                            cancion.top_emocion = emo
+                            cancion.emotion_scores = scores
+                            cancion.save(update_fields=["top_emocion", "emotion_scores"])
                 except Exception:
-                    # Logea y sigue
                     traceback.print_exc()
 
     except Exception as e:
@@ -464,7 +458,6 @@ def capture_deezer_track(request):
         traceback.print_exc()
         return JsonResponse({"ok": False, "error": f"{type(e).__name__}: {e}"}, status=500)
 
-    # Respuesta ligera (puedes dejar JSON si quieres)
     return JsonResponse({
         "ok": True,
         "song_id": cancion.id,
