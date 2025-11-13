@@ -432,6 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 
+  // Evita re-capturar duplicados durante la sesión
   const _capturedOnce = new Set();
 
   async function captureTrackFireAndForget(trackLike) {
@@ -444,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const url = absApi(ROUTES.captureTrack);
 
-        // 1) Intento con JSON (DRF suele preferir esto)
+        // -------- intento #1: JSON (DRF) --------
         const jsonPayload = {
           id: String(p.id),
           deezer_id: String(p.id),
@@ -464,16 +465,14 @@ document.addEventListener('DOMContentLoaded', () => {
             method: 'POST',
             body: JSON.stringify(jsonPayload),
             credentials: 'include',
-            // Content-Type lo pone coreFetch al ver body objeto
           });
           return; // OK con JSON
         } catch (e1) {
-          // Si la respuesta fue 400, reintenta con FormData
           const status = e1?.res?.status;
-          if (status && status !== 400) return; // otros errores: salir silencioso
+          if (status && status !== 400) return; // si no es “Bad Request”, ya no reintentes
         }
 
-        // 2) Fallback con FormData (para vistas que leen request.POST)
+        // -------- intento #2: FormData (vistas Django que leen request.POST) --------
         const fd = new FormData();
         Object.entries(jsonPayload).forEach(([k, v]) => fd.set(k, String(v ?? '')));
 
@@ -481,11 +480,10 @@ document.addEventListener('DOMContentLoaded', () => {
           method: 'POST',
           body: fd,
           credentials: 'include',
-          keepalive: true
-          // ¡no pongas Content-Type manualmente con FormData!
+          keepalive: true,
         });
       } catch {
-        // no-op
+        // silencioso
       }
   }
 

@@ -302,136 +302,175 @@ def _as_id(v):
 @csrf_exempt
 @require_POST
 def capture_deezer_track(request):
-    CLASSIFY_ON_CAPTURE = True
+    CLASSIFY_ON_CAPTURE = str(getattr(settings, "FEELSOUND_CLASSIFY_ON_CAPTURE", "true")).lower() == "true"
+    USE_LYRICS          = str(getattr(settings, "FEELSOUND_USE_LYRICS", "true")).lower() == "true"
 
+    # ---- 1) Leer payload JSON o FormData ----
+    data = {}
+    ct = (request.META.get("CONTENT_TYPE") or "").lower()
+    if "application/json" in ct:
+        try:
+            data = json.loads((request.body or b"").decode("utf-8") or "{}")
+        except json.JSONDecodeError as e:
+            return JsonResponse({"ok": False, "error": f"JSON inválido: {e}"}, status=400)
+    else:
+        data = request.POST.dict()  # soporta FormData
+
+    # helper para tomar claves equivalentes
+    def pick(*keys, default=""):
+        for k in keys:
+            v = data.get(k)
+            if v not in (None, "", []):
+                return v
+        return default
+
+    dz_track_id = str(pick("deezer_id", "id")).strip()
+    title       = pick("title", "titulo").strip()
+    preview     = pick("preview", "preview_url")
+    artist_name = pick("artist", "artista")
+    album_title = pick("album")
+    cover_url   = pick("cover", "portada", "portada_url")
     try:
-        payload = json.loads(request.body.decode("utf-8"))
-        print("[capture] payload:", payload)
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": f"JSON inválido: {e}"}, status=400)
+        duration = int(pick("duration", "duracion", default=30) or 30)
+    except (TypeError, ValueError):
+        duration = 30
 
-    dz_track_id = payload.get("id")
-    title = (payload.get("title") or "").strip()
     if not dz_track_id or not title:
         return JsonResponse({"ok": False, "error": "payload incompleto (id/title)"}, status=400)
 
-    duration  = int(payload.get("duration") or 30)
-    preview   = (payload.get("preview") or "")[:500]
+    # Campos anidados estilo TU payload original
+    artist_obj = data.get("artist") or {}
+    album_obj  = data.get("album") or {}
+    if isinstance(artist_obj, dict):
+        artist_name = artist_name or artist_obj.get("name") or artist_obj.get("title") or ""
+        artist_dzid = artist_obj.get("id") or _as_id(artist_obj.get("name"))
+    else:
+        artist_dzid = None
 
-    # --- Normalización robusta del payload ----
-    art = payload.get("artist") or {}
-    alb = payload.get("album") or {}
+    if isinstance(album_obj, dict):
+        album_title = album_title or album_obj.get("title") or album_obj.get("name") or "—"
+        album_dzid  = album_obj.get("id") or _as_id(album_obj.get("title"))
+        if not cover_url:
+            if isinstance(album_obj.get("cover"), str):
+                cover_url = album_obj["cover"]
+            elif isinstance(album_obj.get("title"), dict) and isinstance(album_obj["title"].get("cover"), str):
+                cover_url = album_obj["title"]["cover"]
+    else:
+        album_dzid = None
+        album_title = album_title or "—"
 
-    artist_name = _as_text(art.get("name"), "name", "title").strip()
-    album_title = (_as_text(alb.get("title"), "title", "name") or "—").strip()
+    # ---- 2) Completar con Deezer si faltan cosas (no crítico) ----
+    try:
+        if not (artist_name and album_title and cover_url):
+            t = _dz_get(f"/track/{dz_track_id}") or {}
+            a = t.get("artist") or {}
+            al = t.get("album") or {}
+            artist_dzid = artist_dzid or (str(a.get("id")) if a.get("id") else None)
+            artist_name = (artist_name or a.get("name") or "").strip()
+            album_dzid  = album_dzid  or (str(al.get("id")) if al.get("id") else None)
+            album_title = (album_title or al.get("title") or "—").strip()
+            cover_url   = cover_url or (al.get("cover") or "")
+    except Exception:
+        # No bloqueamos captura si Deezer falla
+        pass
 
-    artist_dzid_raw = art.get("id")
-    album_dzid_raw = alb.get("id")
-    if not artist_dzid_raw:
-        artist_dzid_raw = _as_id(art.get("name"))
-    if not album_dzid_raw:
-        album_dzid_raw = _as_id(alb.get("title"))
+    # Defaults defensivos
+    artist_name = artist_name or "—"
+    album_title = album_title or "—"
+    cover_url   = cover_url or ""
 
-    artist_dzid = str(artist_dzid_raw) if artist_dzid_raw else None
-    album_dzid = str(album_dzid_raw) if album_dzid_raw else None
-
-    album_cover = ""
-    if isinstance(alb.get("cover"), str):
-        album_cover = alb["cover"]
-    elif isinstance(alb.get("title"), dict):
-        c = alb["title"].get("cover")
-        album_cover = c if isinstance(c, str) else ""
-
-    if not artist_dzid or not album_dzid or not artist_name or not album_title or not album_cover:
-        t = _dz_get(f"/track/{dz_track_id}") or {}
-        a = t.get("artist") or {}
-        al = t.get("album") or {}
-        artist_dzid = artist_dzid or (str(a.get("id")) if a.get("id") else None)
-        artist_name = artist_name or (a.get("name") or "")
-        album_dzid  = album_dzid  or (str(al.get("id")) if al.get("id") else None)
-        album_title = album_title or (al.get("title") or "—")
-        album_cover = album_cover or (al.get("cover") or "")
-
+    # ---- 3) Upsert transaccional, pero sin romper ante detalles menores ----
     try:
         with transaction.atomic():
-            # --- ARTISTA ---
+
+            # ARTISTA
             if artist_dzid:
                 artista, _ = Artista.objects.update_or_create(
-                    deezer_id=artist_dzid,
-                    defaults={"nombre": artist_name or "—"}
+                    deezer_id=str(artist_dzid),
+                    defaults={"nombre": artist_name[:255] or "—"}
                 )
             else:
-                artista, _ = Artista.objects.get_or_create(nombre=artist_name or "—")
+                artista, _ = Artista.objects.get_or_create(
+                    nombre=(artist_name[:255] or "—")
+                )
 
-            _enrich_artist(artista, artist_dzid)
+            try:
+                _enrich_artist(artista, artist_dzid)
+            except Exception:
+                pass
 
-            # --- ÁLBUM ---
+            # ÁLBUM
             if album_dzid:
                 album, _ = Album.objects.update_or_create(
-                    deezer_id=album_dzid,
+                    deezer_id=str(album_dzid),
                     defaults={
-                        "titulo": album_title or "—",
+                        "titulo": album_title[:255] or "—",
                         "artista": artista,
-                        "portada_url": album_cover or ""
+                        "portada_url": cover_url[:500],
                     }
                 )
             else:
                 album, _ = Album.objects.get_or_create(
-                    artista=artista, titulo=album_title or "—",
-                    defaults={"portada_url": album_cover or ""}
+                    artista=artista, titulo=(album_title[:255] or "—"),
+                    defaults={"portada_url": cover_url[:500]}
                 )
 
-            _enrich_album(album, album_dzid)
+            try:
+                _enrich_album(album, album_dzid)
+            except Exception:
+                pass
 
-            # --- CANCIÓN ---
+            # CANCIÓN
             cancion, created = Cancion.objects.update_or_create(
                 deezer_id=str(dz_track_id),
                 defaults={
-                    "titulo": title,
-                    "duracion": duration,
-                    "preview_url": preview,
+                    "titulo": title[:255],
+                    "duracion": int(duration or 30),
+                    "preview_url": preview[:500] if isinstance(preview, str) else "",
                     "artista": artista,
                     "album": album,
                 }
             )
 
-            # --- CLASIFICACIÓN  ---
+            # CLASIFICACIÓN (no crítica)
             if CLASSIFY_ON_CAPTURE and not cancion.top_emocion_id:
-                from .services_emociones import clasificar_6
+                try:
+                    texto = f"{title} - {artist_name}".strip()
+                    if USE_LYRICS:
+                        try:
+                            lyrics = get_lyrics(title, artist_name) or ""
+                        except Exception:
+                            lyrics = ""
+                        if lyrics:
+                            texto = f"{texto}\n\n{lyrics}"
 
-                USE_LYRICS = getattr(settings, "FEELSOUND_USE_LYRICS", True)
-
-                lyrics = ""
-                if USE_LYRICS:
-                    lyrics = get_lyrics(title, artist_name) or ""
-
-                texto = f"{title} - {artist_name}".strip()
-                if lyrics:
-                    texto = f"{texto}\n\n{lyrics}"
-
-                res = clasificar_6(texto, title=title)
-                clave, scores = res["label"], res["scores"]
-
-                emo = Emocion.objects.get(clave=clave)
-                CancionEmocion.objects.update_or_create(
-                    cancion=cancion, emocion=emo, source="goemotions",
-                    defaults={"score": float(scores.get(clave, 0.0))}
-                )
-                cancion.top_emocion = emo
-                cancion.emotion_scores = scores
-                cancion.save(update_fields=["top_emocion", "emotion_scores"])
+                    res = clasificar_6(texto, title=title)
+                    clave, scores = res.get("label"), res.get("scores", {})
+                    if clave:
+                        emo = Emocion.objects.get(clave=clave)
+                        CancionEmocion.objects.update_or_create(
+                            cancion=cancion, emocion=emo, source="goemotions",
+                            defaults={"score": float(scores.get(clave, 0.0))}
+                        )
+                        cancion.top_emocion = emo
+                        cancion.emotion_scores = scores
+                        cancion.save(update_fields=["top_emocion", "emotion_scores"])
+                except Exception:
+                    # Logea y sigue
+                    traceback.print_exc()
 
     except Exception as e:
         print("[capture] ERROR:", repr(e))
         traceback.print_exc()
         return JsonResponse({"ok": False, "error": f"{type(e).__name__}: {e}"}, status=500)
 
+    # Respuesta ligera (puedes dejar JSON si quieres)
     return JsonResponse({
         "ok": True,
         "song_id": cancion.id,
         "created": created,
         "top_emocion": cancion.top_emocion.clave if cancion.top_emocion_id else None,
-    })
+    }, status=201)
 
 # --- FIN: LÓGICA DE LAS EMOCIONES ---
 
