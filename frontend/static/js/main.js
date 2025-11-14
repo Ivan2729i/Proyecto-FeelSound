@@ -1400,13 +1400,15 @@ document.addEventListener('feel:session-switched', () => {
 
 // ============== LOGOUT CONTROLADO ==============
 (function () {
+  console.log("[FeelSound] logout script cargado");
+
   const API_ORIGIN =
     (window.API && window.API.origin) ||
     (window.FEEL?.env?.API_BASE?.replace(/\/api(?:\/v1)?\/?$/,"")) ||
     window.location.origin;  // fallback seguro
 
   async function doLogout() {
-    console.log("[FeelSound] haciendo logout...");
+    console.log("[FeelSound] haciendo logout... API_ORIGIN =", API_ORIGIN);
 
     try {
       await fetch(`${API_ORIGIN}/accounts/logout/`, {
@@ -1434,35 +1436,22 @@ document.addEventListener('feel:session-switched', () => {
         .replace(/\/+$/,"");   // sin slash final
 
     const loginUrl = FE_BASE + "/#login";
-
     console.log("[FeelSound] redirect logout ->", loginUrl);
     location.replace(loginUrl);
   }
 
-  function attachLogoutHandlers() {
-    const btn = document.getElementById('btn-logout');
-    if (btn) {
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        doLogout();
-      });
-    }
+  // La dejo global por si quieres llamarla desde HTML o consola
+  window.doFsLogout = doLogout;
 
-    document.querySelectorAll('[data-logout]').forEach(a => {
-      a.addEventListener('click', function (e) {
-        e.preventDefault();
-        doLogout();
-      });
-    });
-  }
-
-  // Asegurarnos de que el DOM esté listo
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", attachLogoutHandlers);
-  } else {
-    attachLogoutHandlers();
-  }
+  // --- Delegación de eventos: funciona aunque el botón se agregue después ---
+  document.addEventListener('click', function (e) {
+    const target = e.target.closest('#btn-logout,[data-logout]');
+    if (!target) return;
+    e.preventDefault();
+    doLogout();
+  });
 })();
+
 
 
 
