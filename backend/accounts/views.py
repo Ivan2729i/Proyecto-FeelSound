@@ -81,7 +81,8 @@ def login_register_view(request):
                 try:
                     tpl = loader.select_template([
                         'acc_active_email.html',
-                        'accounts/acc_active_email.html',
+                        'pages/acc_active_email.html',
+                        'frontend/pages/acc_active_email.html',
                     ])
                     message_html = tpl.render({
                         'user': user,
@@ -178,25 +179,29 @@ def activate(request, uidb64, token):
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         user = None
 
-    # URL del login del front (ajústala si la movieras)
-    fe_base = getattr(settings, 'FRONTEND_BASE_URL', 'http://127.0.0.1:5500').rstrip('/')
-    fe_login = f"{fe_base}/pages/login_register.html#login"
+    fe_base = getattr(
+        settings,
+        "FRONTEND_BASE_URL",
+        "http://127.0.0.1:5500/pages/login_register.html#login",
+    ).rstrip("/")
+
+    fe_login = f"{fe_base}/#login"
 
     if user is not None and account_activation_token.check_token(user, token):
         user.is_active = True
         user.save()
 
-        request.session['fs_flash'] = {
+        request.session["fs_flash"] = {
             "type": "success",
             "title": "",
-            "text": "¡Gracias por confirmar tu correo! Ahora puedes iniciar sesión."
+            "text": "¡Gracias por confirmar tu correo! Ahora puedes iniciar sesión.",
         }
         return HttpResponseRedirect(fe_login)
     else:
-        request.session['fs_flash'] = {
+        request.session["fs_flash"] = {
             "type": "error",
             "title": "",
-            "text": "El enlace de activación no es válido o ya fue usado."
+            "text": "El enlace de activación no es válido o ya fue usado.",
         }
         return HttpResponseRedirect(fe_login)
 
