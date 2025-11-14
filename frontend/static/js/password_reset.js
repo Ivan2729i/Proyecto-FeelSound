@@ -5,12 +5,11 @@
   const API_ORIGIN =
     (window.API && window.API.origin) ||
     (window.FEEL?.env?.API_BASE?.replace(/\/api(?:\/v1)?\/?$/, "")) ||
-    "http://127.0.0.1:8000";
+    window.location.origin;
 
-  // Adónde mandar tras éxito
-  const FRONT_BASE = (window.FEEL?.env?.FRONTEND_BASE_URL || location.origin).replace(/\/+$/,'');
-  const RESET_DONE_PATH = (window.FEEL?.env?.RESET_DONE_PATH || "/pages/password_reset_done.html");
-  const RESET_DONE_URL = new URL(RESET_DONE_PATH, FRONT_BASE).toString();
+  const RESET_DONE_URL =
+    window.FEEL?.env?.RESET_DONE_URL ||
+    `${API_ORIGIN}/accounts/password_reset/done/`;
 
   const $form = document.getElementById("fs-reset-form");
   const $err  = document.getElementById("err-email");
