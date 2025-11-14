@@ -1402,7 +1402,7 @@ document.addEventListener('feel:session-switched', () => {
   const API_ORIGIN =
     (window.API && window.API.origin) ||
     (window.FEEL?.env?.API_BASE?.replace(/\/api(?:\/v1)?\/?$/,"")) ||
-    "http://127.0.0.1:8000";
+    window.location.origin;
 
   async function doLogout() {
     try {
@@ -1420,17 +1420,19 @@ document.addEventListener('feel:session-switched', () => {
     try { sessionStorage.clear(); } catch {}
     try { wipeUserState(); } catch {}
 
-    // Señal interna para que otras vistas se “vacíen”
     try { __lastUserId = null; UserStore.set(null); } catch {}
     broadcastSessionSwitch(null, null);
 
-    // Redirige con replace para que el back no regrese al dashboard
-    const loginUrl = (window.FEEL?.env?.FRONTEND_BASE_URL || "http://127.0.0.1:5500")
-      .replace(/\/+$/,"") + "/pages/login.html";
+    // ===== RUTA CORRECTA DEL LOGIN (local y producción) =====
+    const FE_BASE =
+      (window.FEEL?.env?.FRONTEND_BASE_URL || window.location.origin)
+        .replace(/\/+$/,"");
+
+    const loginUrl = FE_BASE + "/pages/login_register.html#login";
+
     location.replace(loginUrl);
   }
 
-  // Soporta <button id="btn-logout"> y <a data-logout>
   document.getElementById('btn-logout')?.addEventListener('click', (e) => {
     e.preventDefault(); doLogout();
   });

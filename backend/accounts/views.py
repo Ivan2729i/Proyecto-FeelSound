@@ -148,7 +148,7 @@ def login_register_view(request):
 
                 # A dónde debe ir el front después de loguearse
                 fe_base = getattr(settings, 'FRONTEND_BASE_URL', 'http://127.0.0.1:5500').rstrip('/')
-                fe_redirect = f"{fe_base}/pages/dashboard.html#/"
+                fe_redirect = f"{fe_base}/dashboard/#/"
 
                 # Mensaje flash para que tu front lo lea en /api/flash/consume/
                 request.session['fs_flash'] = {
