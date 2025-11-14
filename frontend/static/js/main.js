@@ -1406,13 +1406,17 @@ document.addEventListener('feel:session-switched', () => {
     window.location.origin;  // fallback seguro
 
   async function doLogout() {
+    console.log("[FeelSound] haciendo logout...");
+
     try {
       await fetch(`${API_ORIGIN}/accounts/logout/`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Accept': 'application/json' }
       });
-    } catch {}
+    } catch (e) {
+      console.warn("Error en /accounts/logout/:", e);
+    }
 
     // Limpia TODO rastro local del usuario
     try { localStorage.removeItem('fs_user_cache_v1'); } catch {}
@@ -1422,28 +1426,42 @@ document.addEventListener('feel:session-switched', () => {
     try { wipeUserState(); } catch {}
 
     try { __lastUserId = null; UserStore.set(null); } catch {}
-    broadcastSessionSwitch(null, null);
+    try { broadcastSessionSwitch(null, null); } catch {}
 
     // ===== RUTA CORRECTA DEL LOGIN =====
     const FE_BASE =
       (window.FEEL?.env?.FRONTEND_BASE_URL || window.location.origin)
         .replace(/\/+$/,"");   // sin slash final
 
-    // si tu vista de login está en "/", usa esto:
     const loginUrl = FE_BASE + "/#login";
-    // si realmente usas otra ruta, por ejemplo "/login/", sería:
-    // const loginUrl = FE_BASE + "/login/#login";
 
+    console.log("[FeelSound] redirect logout ->", loginUrl);
     location.replace(loginUrl);
   }
 
-  // Soporta <button id="btn-logout"> y <a data-logout>
-  document.getElementById('btn-logout')?.addEventListener('click', (e) => {
-    e.preventDefault(); doLogout();
-  });
-  document.querySelectorAll('[data-logout]').forEach(a=>{
-    a.addEventListener('click', (e)=>{ e.preventDefault(); doLogout(); });
-  });
+  function attachLogoutHandlers() {
+    const btn = document.getElementById('btn-logout');
+    if (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        doLogout();
+      });
+    }
+
+    document.querySelectorAll('[data-logout]').forEach(a => {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        doLogout();
+      });
+    });
+  }
+
+  // Asegurarnos de que el DOM esté listo
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", attachLogoutHandlers);
+  } else {
+    attachLogoutHandlers();
+  }
 })();
 
 
