@@ -1397,12 +1397,13 @@ document.addEventListener('feel:session-switched', () => {
   try { window._editingPlaylistId = null; } catch {}
 });
 
+
 // ============== LOGOUT CONTROLADO ==============
 (function () {
   const API_ORIGIN =
     (window.API && window.API.origin) ||
     (window.FEEL?.env?.API_BASE?.replace(/\/api(?:\/v1)?\/?$/,"")) ||
-    window.location.origin;
+    window.location.origin;  // fallback seguro
 
   async function doLogout() {
     try {
@@ -1423,16 +1424,20 @@ document.addEventListener('feel:session-switched', () => {
     try { __lastUserId = null; UserStore.set(null); } catch {}
     broadcastSessionSwitch(null, null);
 
-    // ===== RUTA CORRECTA DEL LOGIN (local y producción) =====
+    // ===== RUTA CORRECTA DEL LOGIN =====
     const FE_BASE =
       (window.FEEL?.env?.FRONTEND_BASE_URL || window.location.origin)
-        .replace(/\/+$/,"");
+        .replace(/\/+$/,"");   // sin slash final
 
-    const loginUrl = FE_BASE + "/pages/login_register.html#login";
+    // si tu vista de login está en "/", usa esto:
+    const loginUrl = FE_BASE + "/#login";
+    // si realmente usas otra ruta, por ejemplo "/login/", sería:
+    // const loginUrl = FE_BASE + "/login/#login";
 
     location.replace(loginUrl);
   }
 
+  // Soporta <button id="btn-logout"> y <a data-logout>
   document.getElementById('btn-logout')?.addEventListener('click', (e) => {
     e.preventDefault(); doLogout();
   });
