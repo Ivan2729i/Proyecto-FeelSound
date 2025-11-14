@@ -1,13 +1,9 @@
 from functools import lru_cache
-import re
-from langdetect import detect, LangDetectException
-from transformers import pipeline
-from pysentimiento import create_analyzer
+import os, re
 
 # ===== Config =====
 NEUTRAL = "neutral"
 EMOS = ["feliz", "triste", "enojado", "amor", "calmada", NEUTRAL]
-
 
 MIN_CONF        = 0.11
 MIN_MARGIN      = 0.04
@@ -16,6 +12,12 @@ NON_NEU_PRIOR   = 0.02
 NEU_CAP_GAP     = 0.08
 W_ES_PYS        = 0.60
 W_ES_GOEMO      = 0.40
+
+# Modelo liviano por defecto
+GOEMO_MODEL = os.getenv(
+    "GOEMO_MODEL",
+    "joeddav/distilbert-base-uncased-go-emotions-student"
+)
 
 _GOEMAP = {
     "joy": "feliz", "sadness": "triste", "anger": "enojado",
@@ -29,7 +31,7 @@ _GOEMAP = {
     "serenity":"calmada","calm":"calmada",
 }
 
-# Heurísticas por título / palabras clave
+# Heurísticas
 TRIGGERS = {
     "amor":   ["love","amor","te amo","te quiero","mi vida","mi amor","corazón","❤️","😍","🥰","beso","abrazo"],
     "enojado":["hate","odio","rabia","furia","ira","wtf","maldito","😡","enoj","enojo","maldita","maldición"],
@@ -37,21 +39,47 @@ TRIGGERS = {
     "feliz":  ["happy","feliz","party","fiesta","bailar","yeah","😁","🎉","celebra","celebrar","brilla","sonríe"],
     "calmada":["calm","calma","relax","paz","peace","chill","😴","tranquilo","sereno","suave","brisa"],
 }
-
 LOVE_PAT = re.compile(r"\b(amor|te\s+amo|te\s+quiero|mi\s+vida|mi\s+amor|coraz[oó]n)\b", re.I)
 CALM_PAT = re.compile(r"\b(calma|paz|tranquil[ao]s?|relajad[ao]s?|relajar|seren[ao]s?|suave[s]?)\b", re.I)
 
+# ---------- Importaciones perezosas / fallbacks ----------
+
+@lru_cache(maxsize=1)
+def _langdetect():
+    try:
+        from langdetect import detect, LangDetectException
+        return detect, LangDetectException
+    except Exception:
+        # Fallback que siempre “detecta” inglés y excepción dummy
+        class _E(Exception): ...
+        def _detect(_text): return "en"
+        return _detect, _E
+
 @lru_cache(maxsize=1)
 def _pipe_en():
-    return pipeline(
-        "text-classification",
-        model="SamLowe/roberta-base-go_emotions",
-        top_k=None, truncation=True, max_length=512, return_all_scores=True
-    )
+    try:
+        from transformers import pipeline
+        return pipeline(
+            "text-classification",
+            model=GOEMO_MODEL,
+            top_k=None,              # devuelve todas
+            truncation=True,
+            max_length=256,
+            return_all_scores=True,
+        )
+    except Exception:
+        return None
 
 @lru_cache(maxsize=1)
 def _pipe_es():
-    return create_analyzer(task="emotion", lang="es")
+    """Analyzer de pysentimiento para español. Puede regresar None si falta."""
+    try:
+        from pysentimiento import create_analyzer
+        return create_analyzer(task="emotion", lang="es")
+    except Exception:
+        return None
+
+# ---------- Utilidades ----------
 
 def _norm6(d: dict) -> dict:
     base = {k: 0.0 for k in EMOS}
@@ -59,15 +87,13 @@ def _norm6(d: dict) -> dict:
         if k in base:
             base[k] = float(v)
     s = sum(base.values()) or 1.0
-    for k in base:
-        base[k] /= s
+    for k in base: base[k] /= s
     return base
 
 def _boost_from_title(title: str) -> dict:
     title = (title or "").lower()
     bump = {k: 0.0 for k in EMOS}
-    if not title:
-        return bump
+    if not title: return bump
     for emo, words in TRIGGERS.items():
         if any(w in title for w in words):
             bump[emo] += 0.05
@@ -76,7 +102,7 @@ def _boost_from_title(title: str) -> dict:
 def _heuristics_boost(text, scores):
     if LOVE_PAT.search(text or ""):
         scores["amor"] += 0.25
-    if CALM_PAT.search(text or "") and scores["enojado"] < 0.25:
+    if CALM_PAT.search(text or "") and scores.get("enojado", 0.0) < 0.25:
         scores["calmada"] += 0.20
     return scores
 
@@ -84,7 +110,6 @@ def _postprocess(scores: dict, title: str = "") -> tuple[str, dict]:
     for emo in EMOS:
         if emo != NEUTRAL:
             scores[emo] = scores.get(emo, 0.0) + NON_NEU_PRIOR
-
     boost = _boost_from_title(title)
     for k in EMOS:
         scores[k] = scores.get(k, 0.0) + boost.get(k, 0.0)
@@ -99,44 +124,49 @@ def _postprocess(scores: dict, title: str = "") -> tuple[str, dict]:
 
     ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     (top_emo, top_val), (_, second_val) = ranked[0], ranked[1]
-
     if top_val < MIN_CONF:
         if second_val >= MIN_CONF and (top_val - second_val) <= MIN_MARGIN:
             top_emo, top_val = ranked[1]
         else:
             top_emo = NEUTRAL
-
     if top_emo == NEUTRAL and (top_val - second_val) <= NEUTRAL_STEAL:
         for emo, val in ranked[1:]:
             if emo != NEUTRAL and val >= MIN_CONF:
-                top_emo = emo
-                break
-
+                top_emo = emo; break
     return top_emo, scores
 
 def _scores_from_goemotions(text: str) -> dict:
-    outs = _pipe_en()(text[:512])[0]
+    clf = _pipe_en()
+    if clf is None:
+        return {}  # sin transformers -> sin contribución EN
+    outs = clf(text[:512])[0]  # return_all_scores=True -> lista de dicts
     agg = {k: 0.0 for k in EMOS}
     for it in outs:
-        k6 = _GOEMAP.get(it["label"], NEUTRAL)
-        agg[k6] += float(it["score"])
+        k6 = _GOEMAP.get(it.get("label"), NEUTRAL)
+        agg[k6] += float(it.get("score", 0.0))
     return agg
+
+# ---------- API principal ----------
 
 def clasificar_6(texto: str, title: str = ""):
     texto = (texto or "").strip()
 
+    # Cortos -> tienden a neutral
     if len(texto.split()) < 12:
         scores = _norm6({NEUTRAL: 0.55})
         label, mixed = _postprocess(scores, title=title)
         return {"label": label, "scores": mixed}
 
+    detect, LangDetectException = _langdetect()
     try:
-        lang = detect(texto)
+        lang = detect(texto) or "es"
     except LangDetectException:
+        lang = "es"
+    except Exception:
         lang = "es"
 
     try:
-        if lang.startswith("es"):
+        if lang.startswith("es") and _pipe_es() is not None:
             es = _pipe_es().predict(texto)
             scores_es = {
                 "feliz":   float(es.probas.get("joy", 0.0)),
@@ -146,18 +176,22 @@ def clasificar_6(texto: str, title: str = ""):
                 "calmada": max(0.0, 0.35 - (es.probas.get("anger",0)+es.probas.get("fear",0)+es.probas.get("disgust",0))/3),
                 "neutral": float(es.probas.get("others", 0.0)),
             }
-
             scores_go = _scores_from_goemotions(texto)
+            # Si no hay transformers, scores_go será {} y pesa solo pysentimiento
             scores = {k: W_ES_PYS*scores_es.get(k,0.0) + W_ES_GOEMO*scores_go.get(k,0.0) for k in EMOS}
-
             label, mixed = _postprocess(scores, title=title)
             return {"label": label, "scores": mixed}
 
-        else:
-            scores = _scores_from_goemotions(texto)
-            label, mixed = _postprocess(scores, title=title)
+        # Fallback (EN o ES sin pysentimiento): solo GoEmotions si está
+        scores = _scores_from_goemotions(texto)
+        if not scores:
+            # Sin ningún modelo: neutral
+            label, mixed = _postprocess({NEUTRAL: 1.0}, title=title)
             return {"label": label, "scores": mixed}
+        label, mixed = _postprocess(scores, title=title)
+        return {"label": label, "scores": mixed}
 
     except Exception:
+        # Nunca romper: neutral
         label, mixed = _postprocess({NEUTRAL: 1.0}, title=title)
         return {"label": label, "scores": mixed}
