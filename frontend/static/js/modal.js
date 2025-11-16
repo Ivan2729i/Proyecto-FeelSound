@@ -4,7 +4,7 @@
 
 (function () {
   // ---------- Refs ----------
-  const $root     = document.getElementById('fs-add-to-pl-modal'); // <div modal>
+  const $root     = document.getElementById('fs-add-to-pl-modal');
   if (!$root) return;
 
   const $overlay  = document.getElementById('fs-atp-overlay');

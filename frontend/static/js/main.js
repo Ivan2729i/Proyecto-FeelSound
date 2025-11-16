@@ -345,8 +345,10 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
         const topU     = document.getElementById('pf-username-top');
 
         if (avatarEl) {
-          const def = avatarEl.dataset.defaultSrc || avatarEl.getAttribute('data-default-src') || avatarEl.src;
-          avatarEl.src = def || '';
+          const def = avatarEl.dataset.defaultSrc || avatarEl.getAttribute('src');
+          const raw  = me.avatar_url || me.avatar || '';
+          const chosen = raw ? absUrl(raw) : def;
+          avatarEl.src = chosen || def;
         }
         if (nameEl)  nameEl.textContent   = 'Usuario';
         if (userEl)  userEl.textContent   = 'usuario';
@@ -570,7 +572,11 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
           });
 
           if (newUser && newUser !== curUser) {
-            document.getElementById('pf-username').textContent = newUser;
+              const userSpan = document.getElementById('pf-username');
+              if (userSpan) userSpan.textContent = newUser;
+
+              const topU = document.getElementById('pf-username-top');
+              if (topU) topU.textContent = '@' + newUser;
           }
           document.getElementById('pf-bio').textContent = (newBio || '').trim() || 'Amante de la música';
         }
@@ -582,11 +588,12 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
           const out = await window.apiFetchV1('/me/avatar', { method: 'POST', body: fd });
 
           let avatar_url = '';
-          if (out && typeof out === 'object' && out.avatar_url) {
-            avatar_url = out.avatar_url;
-          } else {
+          if (out && typeof out === 'object') {
+            avatar_url = out.avatar_url || out.avatar || out.url || '';
+          }
+          if (!avatar_url) {
             const me2 = await window.apiFetchV1('/me');
-            avatar_url = me2?.avatar_url || '';
+            avatar_url = me2?.avatar_url || me2?.avatar || '';
           }
 
           if (avatar_url) {
@@ -603,8 +610,26 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 
         close();
       } catch (err) {
-        console.error(err);
-        if (errUser) { errUser.textContent = 'No se pudo guardar los cambios.'; errUser.classList.remove('hidden'); }
+          console.error(err);
+          let msg = 'No se pudo guardar los cambios.';
+          try {
+            const data = err?.data || err?.response || err;
+            const errors = data?.errors || data;
+
+            const raw =
+              (errors && (errors.username || errors.non_field_errors || errors.detail)) || null;
+
+            if (raw) {
+              if (Array.isArray(raw))       msg = String(raw[0]);
+              else if (typeof raw === 'string') msg = raw;
+              else if (raw.message)         msg = String(raw.message);
+            }
+          } catch (_) {}
+
+          if (errUser) {
+            errUser.textContent = msg;
+            errUser.classList.remove('hidden');
+          }
       } finally {
         if (saveBtn) { saveBtn.textContent = oldText; saveBtn.disabled = false; }
       }
