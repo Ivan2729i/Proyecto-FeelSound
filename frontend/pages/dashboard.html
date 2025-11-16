@@ -293,7 +293,7 @@
           <!-- Scroll interno-->
           <div id="pl-scroll" class="max-h-[60vh] md:max-h-[64vh] overflow-y-auto overscroll-contain pr-2">
             <!-- Grid -->
-            <div id="pl-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 min-h-64"></div>
+            <div id="pl-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 items-start"></div>
           </div>
         </div>
       </section>
@@ -347,7 +347,7 @@
               </div>
             </div>
             <!-- Footer: contador y duración -->
-            <div class="mt-4 flex items-center justify-between text-xs text-white/60">
+            <div class="mt-2 flex items-center justify-between text-xs text-white/60">
               <span class="pl-count">0 canciones</span>
               <span class="pl-duration tabular-nums">0:00</span>
             </div>
@@ -361,7 +361,6 @@
            class="fixed inset-0 z-50 hidden grid place-items-center">
         <!-- overlay -->
         <button id="plm-close-bg" class="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-label="Cerrar"></button>
-
         <!-- panel centrado -->
         <div class="w-[min(900px,92vw)] max-h-[82vh]
                     rounded-2xl border border-white/10 bg-[#0b1630] text-white
@@ -423,7 +422,6 @@
       <!-- Fondo -->
         <button id="pldel-close-bg"
               class="absolute inset-0 bg-black/60 backdrop-blur-sm"></button>
-
         <!-- Panel -->
         <div data-modal-panel
              class="relative mx-auto w-[min(540px,92vw)] rounded-2xl bg-[#0b1630] text-white
@@ -434,12 +432,10 @@
           <div class="px-6 pt-5 pb-4 border-b border-white/10 flex items-start justify-between">
             <h3 class="text-xl font-extrabold tracking-tight">Eliminar playlist</h3>
           </div>
-
           <!-- Texto -->
           <div id="pldel-text" class="px-6 py-4 text-white/80">
             ¿Seguro que quieres borrar <b>…</b>? Esta acción no se puede deshacer.
           </div>
-
           <!-- Acciones -->
           <div class="px-6 pb-5 pt-3 flex items-center justify-end gap-3">
             <button id="pldel-cancel"
@@ -448,7 +444,6 @@
                            focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25 transition">
               Cancelar
             </button>
-
             <!-- Botón primario “azul-morado” -->
             <button id="pldel-confirm"
                     class="inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold
