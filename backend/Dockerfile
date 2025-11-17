@@ -34,5 +34,9 @@ COPY home/ /app/home/
 COPY manage.py /app/manage.py
 COPY init_social.py /app/init_social.py
 
+RUN mkdir -p /app/media
+
+RUN chmod 777 /app/media
+
 EXPOSE 8000
 CMD ["gunicorn", "FeelSound.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
