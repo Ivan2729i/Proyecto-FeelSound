@@ -47,6 +47,7 @@ class MeView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+
 class AvatarUploadView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [parsers.MultiPartParser, parsers.FormParser]
@@ -58,5 +59,8 @@ class AvatarUploadView(views.APIView):
         u = request.user
         u.profile_picture = file
         u.save(update_fields=["profile_picture"])
-        return Response({"avatar_url": u.profile_picture.url}, status=200)
+
+        full_url = request.build_absolute_uri(u.profile_picture.url)
+
+        return Response({"avatar_url": full_url}, status=200)
 
