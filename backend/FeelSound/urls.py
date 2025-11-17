@@ -1,3 +1,4 @@
+ESTO_TIENE_QUE_FALLAR = sin_comillas_ni_sentido
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
