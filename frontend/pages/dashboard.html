@@ -10,11 +10,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <!-- CSS generado por Tailwind CLI + tus estilos -->
+  <!-- CSS generado por Tailwind CLI -->
   <link rel="stylesheet" href="../static/css/output.css">
   <link rel="stylesheet" href="../static/css/styles.css">
 
-  <!-- Prefetch Deezer (opcional si lo usas en el player) -->
+  <!-- Prefetch Deezer -->
   <link rel="dns-prefetch" href="https://cdnt-preview.dzcdn.net">
   <link rel="preconnect" href="https://cdnt-preview.dzcdn.net" crossorigin>
   <link rel="dns-prefetch" href="https://cdn-images.dzcdn.net">
@@ -140,7 +140,8 @@
     </aside>
 
     <!-- CONTENIDO principal -->
-    <main id="fs-content" class="bg-fs-dif flex-1 p-4 md:p-6 lg:p-8 h-[calc(100dvh-64px-96px)] overflow-hidden">
+    <main id="fs-content" class="bg-fs-dif flex-1 p-4 md:p-6 lg:p-8 min-h-[calc(100dvh-64px)] md:h-[calc(100dvh-64px-96px)]
+          md:overflow-hidden pb-24" >
       <!-- === VIEW: Biblioteca Musical === -->
       <section id="view-dashboard" class="space-y-6">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -164,19 +165,22 @@
 
         <!-- Tabla de canciones -->
         <div class="rounded-2xl bg-white/5 backdrop-blur border border-white/10 overflow-hidden shadow-lg">
-          <div id="fs-songs-scroll" class="overflow-y-auto pr-1" style="height: calc(100dvh - 64px - 96px - 8rem);">
-            <table class="min-w-full divide-y divide-white/10 text-sm text-white/80">
-              <thead class="sticky top-0 z-10 bg-[#0B1E5B] text-white/80 text-xs uppercase tracking-wider shadow-[0_1px_0_0_rgba(255,255,255,.08)]">
-                <tr>
-                  <th class="px-4 py-3 text-left font-medium">#</th>
-                  <th class="px-4 py-3 text-left font-medium">Título</th>
-                  <th class="px-4 py-3 text-left font-medium">Álbum</th>
-                  <th class="px-4 py-3 text-left font-medium">Duración</th>
-                  <th class="px-2 py-3 text-left font-medium w-10"></th>
-                </tr>
-              </thead>
-              <tbody id="fs-results-body" class="divide-y divide-white/5 cursor-pointer"></tbody>
-            </table>
+          <div id="fs-songs-scroll"
+               class="overflow-y-auto pr-1 max-h-[60vh] md:max-h-[calc(100dvh-64px-96px-8rem)]">
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-white/10 text-sm text-white/80">
+                <thead class="sticky top-0 z-10 bg-[#0B1E5B] text-white/80 text-xs uppercase tracking-wider shadow-[0_1px_0_0_rgba(255,255,255,.08)]">
+                  <tr>
+                    <th class="px-4 py-3 text-left font-medium">#</th>
+                    <th class="px-4 py-3 text-left font-medium">Título</th>
+                    <th class="px-4 py-3 text-left font-medium">Álbum</th>
+                    <th class="px-4 py-3 text-left font-medium">Duración</th>
+                    <th class="px-2 py-3 text-left font-medium w-10"></th>
+                  </tr>
+                </thead>
+                <tbody id="fs-results-body" class="divide-y divide-white/5 cursor-pointer"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -586,7 +590,9 @@
 
       <!-- PLAYER BAR -->
       <footer id="fs-playerbar" class="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-black/40 backdrop-blur">
-        <div class="max-w-7xl mx-auto px-4 md:px-6 py-3 grid grid-cols-[320px_1fr_180px] items-center gap-4">
+        <div class="max-w-7xl mx-auto px-4 md:px-6 py-2 md:py-3
+                    flex flex-col gap-3
+                    md:grid md:grid-cols-[320px_1fr_180px] md:items-center">
           <!-- Izquierda: cover + info -->
           <div class="flex items-center gap-3 min-w-0">
             <img id="player-cover" loading="lazy" src="../static/img/no_music.png" alt="Imagen Defecto"
