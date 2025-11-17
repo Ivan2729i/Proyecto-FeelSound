@@ -334,40 +334,45 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
   }
   const escAttr = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  function clearProfile() {
-      try {
-        const avatarEl = document.getElementById('pf-avatar');
-        const nameEl   = document.getElementById('pf-name');
-        const userEl   = document.getElementById('pf-username');
-        const bioEl    = document.getElementById('pf-bio');
-        const emailEl  = document.getElementById('pf-email');
-        const memberEl = document.getElementById('pf-member-since');
-        const topU     = document.getElementById('pf-username-top');
+    function clearProfile() {
+        try {
+          const avatarEl = document.getElementById('pf-avatar');
+          const nameEl   = document.getElementById('pf-name');
+          const userEl   = document.getElementById('pf-username');
+          const bioEl    = document.getElementById('pf-bio');
+          const emailEl  = document.getElementById('pf-email');
+          const memberEl = document.getElementById('pf-member-since');
+          const topU     = document.getElementById('pf-username-top');
 
-        if (avatarEl) {
-          const def = avatarEl.dataset.defaultSrc || avatarEl.getAttribute('src');
-          const raw  = me.avatar_url || me.avatar || '';
-          const chosen = raw ? absUrl(raw) : def;
-          avatarEl.src = chosen || def;
-        }
-        if (nameEl)  nameEl.textContent   = 'Usuario';
-        if (userEl)  userEl.textContent   = 'usuario';
-        if (bioEl)   bioEl.textContent    = 'Amante de la música';
-        if (emailEl) emailEl.textContent  = 'usuario@example.com';
-        if (memberEl) memberEl.textContent= '—';
-        if (topU) topU.textContent = '@invitado';
+          // Avatar: volver al default
+          if (avatarEl) {
+            const def = avatarEl.dataset.defaultSrc
+                     || avatarEl.getAttribute('data-default-src')
+                     || avatarEl.src;
+            avatarEl.src = def || '';
+          }
 
-        // Tarjetas de estadísticas a cero
-        const z = (id, val) => { const el=document.getElementById(id); if (el) el.textContent = val; };
-        z('pf-listen-time', '0 min');
-        z('pf-fav-mood', '—');
-        z('pf-total-plays', '0');
-        z('pf-pl-count', '0');
+          if (nameEl)   nameEl.textContent    = 'Usuario';
+          if (userEl)   userEl.textContent    = 'usuario';
+          if (bioEl)    bioEl.textContent     = 'Amante de la música';
+          if (emailEl)  emailEl.textContent   = 'usuario@example.com';
+          if (memberEl) memberEl.textContent  = '—';
+          if (topU)     topU.textContent      = '@invitado';
 
-        // Lista de recientes vacía
-        document.getElementById('pf-recent-list')?.replaceChildren();
-      } catch {}
-  }
+          // Stats a cero
+          const z = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+          };
+          z('pf-listen-time', '0 min');
+          z('pf-fav-mood',   '—');
+          z('pf-total-plays','0');
+          z('pf-pl-count',   '0');
+
+          // Recientes vacío
+          document.getElementById('pf-recent-list')?.replaceChildren();
+        } catch {}
+    }
 
   // Cuando llega el usuario (o null), pinta o limpia
   document.addEventListener('feel:user-ready', (ev) => {
@@ -418,7 +423,8 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 
     if (avatarEl) {
       const def = avatarEl.dataset.defaultSrc || avatarEl.getAttribute('src');
-      const chosen = me.avatar_url ? absUrl(me.avatar_url) : def;
+      const raw = me.avatar_url || me.avatar || '';   // soporta ambos nombres
+      const chosen = raw ? absUrl(raw) : def;
       avatarEl.src = chosen || def;
     }
     const topU = document.getElementById('pf-username-top');
@@ -577,6 +583,11 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 
               const topU = document.getElementById('pf-username-top');
               if (topU) topU.textContent = '@' + newUser;
+
+              const nameEl = document.getElementById('pf-name');
+              if (nameEl && nameEl.textContent.trim() === curUser) {
+                nameEl.textContent = newUser;
+              }
           }
           document.getElementById('pf-bio').textContent = (newBio || '').trim() || 'Amante de la música';
         }
@@ -609,27 +620,42 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
         await hydrateUser({ force: true });
 
         close();
-      } catch (err) {
-          console.error(err);
-          let msg = 'No se pudo guardar los cambios.';
-          try {
-            const data = err?.data || err?.response || err;
-            const errors = data?.errors || data;
+            } catch (err) {
+        console.error(err);
+        let msg = 'No se pudo guardar los cambios.';
 
-            const raw =
-              (errors && (errors.username || errors.non_field_errors || errors.detail)) || null;
+        try {
+          const data   = err?.data || err?.response || null;
+          const errors = data?.errors || data;
+
+          if (errors) {
+            let raw =
+              errors.username ||
+              errors.non_field_errors ||
+              errors.detail ||
+              errors.error ||
+              null;
+
+            if (!raw && typeof errors === 'string') {
+              raw = errors;
+            }
 
             if (raw) {
               if (Array.isArray(raw))       msg = String(raw[0]);
               else if (typeof raw === 'string') msg = raw;
               else if (raw.message)         msg = String(raw.message);
             }
-          } catch (_) {}
-
-          if (errUser) {
-            errUser.textContent = msg;
-            errUser.classList.remove('hidden');
           }
+        } catch (_) {}
+
+        if (errUser) {
+          errUser.textContent = msg;
+          errUser.classList.remove('hidden');
+        }
+        // resalta el input si el problema es el username
+        if (inpUser && /usuario|username/i.test(msg)) {
+          inpUser.classList.add('border-red-500');
+        }
       } finally {
         if (saveBtn) { saveBtn.textContent = oldText; saveBtn.disabled = false; }
       }
