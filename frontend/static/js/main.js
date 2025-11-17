@@ -334,7 +334,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
   }
   const escAttr = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    function clearProfile() {
+      function clearProfile() {
         try {
           const avatarEl = document.getElementById('pf-avatar');
           const nameEl   = document.getElementById('pf-name');
@@ -344,11 +344,13 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
           const memberEl = document.getElementById('pf-member-since');
           const topU     = document.getElementById('pf-username-top');
 
-          // Avatar: volver al default
+          // Avatar: volver al default real
           if (avatarEl) {
             const def = avatarEl.dataset.defaultSrc
                      || avatarEl.getAttribute('data-default-src')
+                     || avatarEl.getAttribute('src')
                      || avatarEl.src;
+            avatarEl.dataset.defaultSrc = def || '';
             avatarEl.src = def || '';
           }
 
@@ -372,7 +374,7 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
           // Recientes vacío
           document.getElementById('pf-recent-list')?.replaceChildren();
         } catch {}
-    }
+      }
 
   // Cuando llega el usuario (o null), pinta o limpia
   document.addEventListener('feel:user-ready', (ev) => {
@@ -406,30 +408,43 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
     } catch { return '—'; }
   }
 
-  function paintUser(me) {
-    const avatarEl = document.getElementById('pf-avatar');
-    const nameEl   = document.getElementById('pf-name');
-    const userEl   = document.getElementById('pf-username');
-    const bioEl    = document.getElementById('pf-bio');
-    const emailEl  = document.getElementById('pf-email');
-    const memberEl = document.getElementById('pf-member-since');
+    function paintUser(me) {
+        const avatarEl = document.getElementById('pf-avatar');
+        const nameEl   = document.getElementById('pf-name');
+        const userEl   = document.getElementById('pf-username');
+        const bioEl    = document.getElementById('pf-bio');
+        const emailEl  = document.getElementById('pf-email');
+        const memberEl = document.getElementById('pf-member-since');
 
-    const full = `${me.first_name ?? ''} ${me.last_name ?? ''}`.trim();
-    if (nameEl)  nameEl.textContent = full || (me.username ?? 'Usuario');
-    if (userEl)  userEl.textContent = me.username ?? 'usuario';
-    if (bioEl)   bioEl.textContent  = (me.bio ?? '').trim() || 'Amante de la música';
-    if (emailEl) emailEl.textContent= me.email ?? 'usuario@example.com';
-    if (memberEl) memberEl.textContent = fmtJoined(me.date_joined || memberEl?.dataset?.joined || new Date().toISOString());
+        const full = `${me.first_name ?? ''} ${me.last_name ?? ''}`.trim();
+        if (nameEl)   nameEl.textContent   = full || (me.username ?? 'Usuario');
+        if (userEl)   userEl.textContent   = me.username ?? 'usuario';
+        if (bioEl)    bioEl.textContent    = (me.bio ?? '').trim() || 'Amante de la música';
+        if (emailEl)  emailEl.textContent  = me.email ?? 'usuario@example.com';
+        if (memberEl) memberEl.textContent = fmtJoined(
+          me.date_joined || memberEl?.dataset?.joined || new Date().toISOString()
+        );
 
-    if (avatarEl) {
-      const def = avatarEl.dataset.defaultSrc || avatarEl.getAttribute('src');
-      const raw = me.avatar_url || me.avatar || '';   // soporta ambos nombres
-      const chosen = raw ? absUrl(raw) : def;
-      avatarEl.src = chosen || def;
+        // 🔥 Avatar
+        if (avatarEl) {
+          // guarda el src inicial como default una sola vez
+          if (!avatarEl.dataset.defaultSrc) {
+            const initial =
+              avatarEl.getAttribute('data-default-src') ||
+              avatarEl.getAttribute('src') ||
+              avatarEl.src;
+            avatarEl.dataset.defaultSrc = initial || '';
+          }
+
+          const def = avatarEl.dataset.defaultSrc;
+          const raw = me.avatar_url || me.avatar || '';   // soporta ambos nombres
+          const chosen = raw ? absUrl(raw) : def;
+          avatarEl.src = chosen || def;
+        }
+
+        const topU = document.getElementById('pf-username-top');
+        if (topU) topU.textContent = '@' + (me.username ?? 'usuario');
     }
-    const topU = document.getElementById('pf-username-top');
-    if (topU) topU.textContent = '@' + (me.username ?? 'usuario');
-  }
 
   function bindEditModal() {
     const modal = document.getElementById('pf-edit-modal');
@@ -591,17 +606,21 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
           }
           document.getElementById('pf-bio').textContent = (newBio || '').trim() || 'Amante de la música';
         }
-
-        if (needUpload) {
+          if (needUpload) {
           const fd = new FormData();
           fd.append('avatar', inpAvatar.files[0]);
 
-          const out = await window.apiFetchV1('/me/avatar', { method: 'POST', body: fd });
+          const out = await window.apiFetchV1('/me/avatar', {
+            method: 'POST',
+            body: fd
+          });
 
           let avatar_url = '';
           if (out && typeof out === 'object') {
             avatar_url = out.avatar_url || out.avatar || out.url || '';
           }
+
+          // Si la respuesta no trae nada claro, volvemos a leer /me
           if (!avatar_url) {
             const me2 = await window.apiFetchV1('/me');
             avatar_url = me2?.avatar_url || me2?.avatar || '';
@@ -609,10 +628,29 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
 
           if (avatar_url) {
             const u = bust(absUrl(avatar_url));
+
             const avatarEl = document.getElementById('pf-avatar');
             const preview  = document.getElementById('pf-edit-preview');
-            if (avatarEl) avatarEl.src = u;
-            if (preview)  preview.src  = u;
+
+            if (avatarEl) {
+              // actualiza src y deja el default apuntando al nuevo avatar
+              avatarEl.src = u;
+              avatarEl.dataset.defaultSrc = u;
+            }
+            if (preview) {
+              preview.src = u;
+            }
+
+            // opcional: refrescar caché del usuario para /me
+            try {
+              const CKEY = 'fs_user_cache_v1';
+              const cachedObj = JSON.parse(localStorage.getItem(CKEY) || 'null');
+              if (cachedObj && cachedObj.data) {
+                cachedObj.data.avatar_url = avatar_url;
+                cachedObj.data.avatar     = avatar_url;
+                localStorage.setItem(CKEY, JSON.stringify(cachedObj));
+              }
+            } catch {}
           }
         }
 
@@ -620,40 +658,54 @@ document.getElementById('btn-play')?.addEventListener('click', (e) => {
         await hydrateUser({ force: true });
 
         close();
-            } catch (err) {
-        console.error(err);
+      } catch (err) {
+        console.error('Error guardando perfil', err);
         let msg = 'No se pudo guardar los cambios.';
 
         try {
-          const data   = err?.data || err?.response || null;
+          let data = err?.data || err?.response || null;
+
+          if (!data && err && typeof err.json === 'function') {
+            data = await err.json().catch(() => null);
+          }
+
           const errors = data?.errors || data;
 
           if (errors) {
             let raw =
               errors.username ||
               errors.non_field_errors ||
+              errors.__all__ ||
               errors.detail ||
               errors.error ||
               null;
+
+            // Si viene algo tipo {"username": ["Ya existe..."]}
+            if (!raw && typeof errors === 'object') {
+              if (errors.username) raw = errors.username;
+            }
 
             if (!raw && typeof errors === 'string') {
               raw = errors;
             }
 
             if (raw) {
-              if (Array.isArray(raw))       msg = String(raw[0]);
+              if (Array.isArray(raw))          msg = String(raw[0]);
               else if (typeof raw === 'string') msg = raw;
-              else if (raw.message)         msg = String(raw.message);
+              else if (raw.message)            msg = String(raw.message);
             }
           }
-        } catch (_) {}
+        } catch (_) {
+          // si algo truena aquí dejamos el mensaje genérico
+        }
 
         if (errUser) {
           errUser.textContent = msg;
           errUser.classList.remove('hidden');
         }
-        // resalta el input si el problema es el username
-        if (inpUser && /usuario|username/i.test(msg)) {
+
+        // Resalta el input si el problema es el username
+        if (inpUser && /usuario|username|nombre de usuario/i.test(msg)) {
           inpUser.classList.add('border-red-500');
         }
       } finally {
