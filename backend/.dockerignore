@@ -21,6 +21,8 @@ build/
 .env
 .env.*
 *.sqlite3
+# Permitir únicamente el ejemplo
+!.env.example
 
 # Estáticos y media generados localmente
 static/
